@@ -576,6 +576,13 @@ class FluxPipeline(
         """
         self.vae.disable_tiling()
 
+    def calculate_ex_t_squared(self, x_t: torch.Tensor) -> torch.Tensor:
+        # 转换为float32计算
+        x_t_float32 = x_t.to(dtype=torch.float32)
+        sum_squares = torch.sum(x_t_float32 ** 2, dim=tuple(range(-3, 0)))
+        chw = x_t_float32.shape[-3] * x_t_float32.shape[-2] * x_t_float32.shape[-1]
+        return sum_squares / chw
+
     def prepare_latents(
         self,
         batch_size,
@@ -605,11 +612,15 @@ class FluxPipeline(
             )
 
         latents = randn_tensor(shape, generator=generator, device=device, dtype=dtype)
+        print("latent_shape: ", latents.shape)
+        print("latent energy: ", self.calculate_ex_t_squared(latents))
         latents = self._pack_latents(latents, batch_size, num_channels_latents, height, width)
 
         latent_image_ids = self._prepare_latent_image_ids(batch_size, height // 2, width // 2, device, dtype)
 
         return latents, latent_image_ids
+    
+
 
     @property
     def guidance_scale(self):
@@ -945,6 +956,9 @@ class FluxPipeline(
 
         else:
             latents = self._unpack_latents(latents, height, width, self.vae_scale_factor)
+
+            print("image energy: ", self.calculate_ex_t_squared(latents))
+
             latents = (latents / self.vae.config.scaling_factor) + self.vae.config.shift_factor
             image = self.vae.decode(latents, return_dict=False)[0]
             image = self.image_processor.postprocess(image, output_type=output_type)

@@ -1,9 +1,11 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 import gc
 from typing import Any, Dict, Optional, Tuple, Union
 import torch
 import math
 import argparse
-import os
+
 
 from PIL import Image
 from diffusers import FluxPipeline,RfSolverFluxPipeline, RfSolverFluxTransformer2DModel
@@ -19,7 +21,6 @@ from datasets import get_dataloader
 from utils.utils import *
 from utils.metrics import *
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 logger = logging.getLogger(__name__)   # pylint: disable=invalid-name
 
@@ -273,6 +274,21 @@ def interpolated_denoise(
     latents = latents.to(DTYPE)
     return latents ,joint_attention_kwargs
 
+def calculate_ex_t_squared(x_t: torch.Tensor) -> torch.Tensor:
+    """
+    计算扩散模型中潜在变量x_t的平均相对能量（公式8）
+    Args:
+        x_t: 输入张量，形状为 [B, C, H, W] 或 [C, H, W]
+    Returns:
+        Ex_t_squared: 平均能量，形状为 [B]（有批量）或标量（无批量）
+    """
+    # 计算所有元素的平方和（自动处理批量维度）
+    sum_squares = torch.sum(x_t**2, dim=tuple(range(-3, 0)))  # 对C,H,W求和
+    # 计算归一化因子 C*H*W
+    chw = x_t.shape[-3] * x_t.shape[-2] * x_t.shape[-1]
+    # 返回平均能量
+    return sum_squares / chw
+
 @torch.inference_mode()
 def main(args):
 
@@ -344,7 +360,8 @@ def main(args):
         img = img.to(device).to(DTYPE)
         # vae encode
         img_latent = encode_imgs(img, pipe, DTYPE)
-
+        print("img_latent:", calculate_ex_t_squared(img_latent))
+        #img_latent=img_latent*1.15
         if True:
             # 进行插值反演
             inversed_latent ,joint_attention_kwargs = interpolated_inversion(
@@ -358,7 +375,7 @@ def main(args):
                 joint_attention_kwargs=joint_attention_kwargs)    
         else:
             inversed_latent = None
-
+        print("inversed_latent:", calculate_ex_t_squared(inversed_latent))
         # 进行去噪
         img_latents,joint_attention_kwargs = interpolated_denoise(
             pipe, 
@@ -373,6 +390,7 @@ def main(args):
             img_latents=img_latent
         )
 
+        print("img_latents_nudge:", calculate_ex_t_squared(img_latents))
         # 将潜变量解码为图像
         out = decode_imgs(img_latents, pipe)[0]
 
@@ -411,7 +429,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='使用不同参数测试 interpolated_denoise。')
     parser.add_argument('--model_path', type=str, default='/root/autodl-tmp/Flux-dev', help='预训练模型的路径')
     parser.add_argument('--image_path', type=str, default='./example/image.png', help='输入图像的路径')
-    parser.add_argument('--eval-datasets', type=str, default='')
+    parser.add_argument('--eval-datasets', type=str, default='', help='选择要编辑的数据集：EditEval_v1, PIE-Bench')
     parser.add_argument('--output_dir', type=str, default='outputs', help='保存输出图像的目录')
     parser.add_argument('--use_inversed_latents', action='store_true', help='使用反转潜变量')
     parser.add_argument('--guidance_scale', type=float, default=3.5, help='interpolated_denoise 的引导比例')

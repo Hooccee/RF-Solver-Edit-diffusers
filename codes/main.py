@@ -403,7 +403,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='使用不同参数测试 interpolated_denoise。')
     parser.add_argument('--model_path', type=str, default='/root/autodl-tmp/Flux-dev', help='预训练模型的路径')
     parser.add_argument('--image_path', type=str, default='./example/image.png', help='输入图像的路径')
-    parser.add_argument('--eval-datasets', type=str, default='')
+    parser.add_argument('--eval-datasets', type=str, default='', help='选择要编辑的数据集：EditEval_v1, PIE-Bench')
     parser.add_argument('--output_dir', type=str, default='outputs', help='保存输出图像的目录')
     parser.add_argument('--use_inversed_latents', action='store_true', help='使用反转潜变量')
     parser.add_argument('--guidance_scale', type=float, default=3.5, help='interpolated_denoise 的引导比例')

@@ -2438,9 +2438,11 @@ class RfSolverFluxAttnProcessor2_0:
                     feature[feature_name] = value.cpu()
                 else:
                     value =feature[feature_name].cuda()           
-
+            
+            #print("hidden_states.shape:",hidden_states.shape)
             # the attention in FluxSingleTransformerBlock does not use `encoder_hidden_states`
             if encoder_hidden_states is not None:
+                #print("encoder_hidden_states.shape:",encoder_hidden_states.shape)
                 # `context` projections.
                 encoder_hidden_states_query_proj = attn.add_q_proj(encoder_hidden_states)
                 encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)
