@@ -7,7 +7,7 @@ from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMe
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.regression import MeanSquaredError
 
-class metircs:
+class metircs:  #输入图像值范围均为[-1,1]
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
