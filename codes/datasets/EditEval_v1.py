@@ -2,6 +2,8 @@ from torch.utils.data import Dataset
 import pandas as pd
 from PIL import Image
 import os
+import numpy as np
+import torch
 
 default_rootpath = '/data/chx/EditEval_v1/Dataset'
 default_csvpath = '/data/chx/EditEval_v1/Dataset/editing_prompts_collection.xlsx'
@@ -51,7 +53,8 @@ class EditEval_v1_dataset(Dataset):
         if not os.path.exists(impath):
             impath = impath.replace('jpg', 'jpeg')
         img = Image.open(impath)
-        img = self.transform(img)
+        if self.transform:
+            img = self.transform(img)
         return img, source_prompt, target_prompt
 
     def __len__(self):

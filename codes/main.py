@@ -93,7 +93,7 @@ def interpolated_inversion(
                     encoder_hidden_states=prompt_embeds,
                     txt_ids=text_ids,
                     img_ids=latent_image_ids,
-                    joint_attention_kwargs=joint_attention_kwargs,  #TODO:此处可以传递inject的相关参数，详细仍需再研究，考虑形如 joint_attention_kwargs['inject'] = inject_list[i]  24/11/19 修改到此
+                    joint_attention_kwargs=joint_attention_kwargs, 
                     return_dict=pipeline,
                 )
             pred=pred[0]
