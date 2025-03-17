@@ -134,8 +134,8 @@ def interpolated_inversion(
     # 解包潜变量
     latents = pipeline._unpack_latents(
             packed_latents,
-            height=1024,
-            width=1024,
+            height=args.height,
+            width=args.width,
             vae_scale_factor=pipeline.vae_scale_factor,
     )
     latents = latents.to(DTYPE)
@@ -267,8 +267,8 @@ def interpolated_denoise(
     # 解包潜变量
     latents = pipeline._unpack_latents(
             packed_latents,
-            height=1024,
-            width=1024,
+            height=args.height,
+            width=args.width,
             vae_scale_factor=pipeline.vae_scale_factor,
     )
     latents = latents.to(DTYPE)
@@ -332,17 +332,24 @@ def main(args):
         img = Image.open(args.image_path)
         train_transforms = transforms.Compose(
                     [
-                        transforms.Resize(1024, interpolation=transforms.InterpolationMode.BILINEAR),
-                        transforms.CenterCrop(1024),
-                        transforms.ToTensor(),
-                        transforms.Normalize([0.5], [0.5]),
+                    transforms.Resize((args.height, args.width), interpolation=transforms.InterpolationMode.BILINEAR),
+                    transforms.ToTensor(),
+                    transforms.Normalize([0.5], [0.5])
                     ]
                 )
 
         img = train_transforms(img).unsqueeze(0)
         dataloader = [img, args.source_prompt, args.target_prompt]
     else:
-        dataset = get_dataloader(args.eval_datasets)
+        default_transform = transforms.Compose(
+            [
+            transforms.Resize((args.height, args.width), interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.ToTensor(),
+            transforms.Normalize([0.5], [0.5])
+            ]
+        )
+
+        dataset = get_dataloader(args.eval_datasets,default_transform)
         dataloader = DataLoader(
             dataset,
             batch_size=1,          # 每批64个样本
@@ -353,11 +360,15 @@ def main(args):
 
     # ******** evaluation **********
     mean_clip_score = 0
+    mean_mse_score = 0
+    mean_psnr_score = 0
+    mean_lpips_score = 0
     count = 0
-    for img, source_prompt, target_prompt in dataloader:
+    for img_float32, source_prompt, target_prompt in dataloader:
         print(source_prompt)
         print(target_prompt)
-        img = img.to(device).to(DTYPE)
+        img_float32 = img_float32.to(device)
+        img = img_float32.to(DTYPE)
         # vae encode
         img_latent = encode_imgs(img, pipe, DTYPE)
         print("img_latent:", calculate_ex_t_squared(img_latent))
@@ -392,12 +403,33 @@ def main(args):
 
         print("img_latents_nudge:", calculate_ex_t_squared(img_latents))
         # 将潜变量解码为图像
-        out = decode_imgs(img_latents, pipe)[0]
+        out = decode_imgs(img_latents, pipe,output_type="pil")[0]
+        out_latent_float32=transforms.Compose(
+                    [
+                    transforms.Resize((args.height, args.width), interpolation=transforms.InterpolationMode.BILINEAR),
+                    transforms.ToTensor(),
+                    transforms.Normalize([0.5], [0.5])
+                    ]
+                    )(out).unsqueeze(0).to(device)
 
-        # evaluation
-        clip_score = metrics.clip_scores(target_prompt, out)
+        # evaluation  img, out均为[-1,1]
+        # clip score
+        clip_score = metrics.clip_scores( out_latent_float32,target_prompt)
         print(f"==> clip score: {clip_score:.4f}")
         mean_clip_score += clip_score
+        # mse score
+        mse_score = metrics.mse_scores(img_float32, out_latent_float32)
+        print(f"==> mse score: {mse_score:.4f}")
+        mean_mse_score += mse_score
+        #psnr score
+        psnr_score = metrics.psnr_scores(img_float32, out_latent_float32)
+        print(f"==> psnr score: {psnr_score:.4f}")
+        mean_psnr_score += psnr_score
+        #lpips score
+        lpips_score = metrics.lpips_scores(img_float32, out_latent_float32)
+        print(f"==> lpips score: {lpips_score:.4f}")
+        mean_lpips_score += lpips_score
+
 
         count += 1
 
@@ -417,6 +449,13 @@ def main(args):
     print('######### Evaluation Results ###########')
     mean_clip_score = mean_clip_score / count
     print(f"==> clip score: {mean_clip_score:.4f}")
+    mean_mse_score = mean_mse_score / count
+    print(f"==> mse score: {mean_mse_score:.4f}")
+    mean_psnr_score = mean_psnr_score / count
+    print(f"==> psnr score: {mean_psnr_score:.4f}")
+    mean_lpips_score = mean_lpips_score / count
+    print(f"==> lpips score: {mean_lpips_score:.4f}")
+    print('#######################################')
 
     # 显式删除不再需要的变量
     pipe.maybe_free_model_hooks()
@@ -429,7 +468,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='使用不同参数测试 interpolated_denoise。')
     parser.add_argument('--model_path', type=str, default='/root/autodl-tmp/Flux-dev', help='预训练模型的路径')
     parser.add_argument('--image_path', type=str, default='./example/image.png', help='输入图像的路径')
-    parser.add_argument('--eval-datasets', type=str, default='', help='选择要编辑的数据集：EditEval_v1, PIE-Bench')
+    parser.add_argument('--eval-datasets', type=str, default='', help='选择要编辑的数据集: EditEval_v1, PIE-Bench')
     parser.add_argument('--output_dir', type=str, default='outputs', help='保存输出图像的目录')
     parser.add_argument('--use_inversed_latents', action='store_true', help='使用反转潜变量')
     parser.add_argument('--guidance_scale', type=float, default=3.5, help='interpolated_denoise 的引导比例')
@@ -447,6 +486,9 @@ if __name__ == "__main__":
                         help='the path to save the feature ')
     parser.add_argument('--inject', type=int, default=5,
                         help='the number of timesteps which apply the feature sharing')
-    
+    parser.add_argument('--height', type=int, default=1024,
+                        help='输出图像的高度')
+    parser.add_argument('--width', type=int, default=1024,
+                        help='输出图像的宽度')    
     args = parser.parse_args()
     main(args)

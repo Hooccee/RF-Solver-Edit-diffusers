@@ -1,3 +1,4 @@
 outputs
 features
 test.ipynb
+*.log

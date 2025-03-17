@@ -133,8 +133,8 @@ def interpolated_inversion(
     # 解包潜变量
     latents = pipeline._unpack_latents(
             packed_latents,
-            height=1024,
-            width=1024,
+            height=args.height,
+            width=args.width,
             vae_scale_factor=pipeline.vae_scale_factor,
     )
     latents = latents.to(DTYPE)
@@ -266,8 +266,8 @@ def interpolated_denoise(
     # 解包潜变量
     latents = pipeline._unpack_latents(
             packed_latents,
-            height=1024,
-            width=1024,
+            height=args.height,
+            width=args.width,
             vae_scale_factor=pipeline.vae_scale_factor,
     )
     latents = latents.to(DTYPE)
@@ -310,17 +310,24 @@ def main(args):
         img = Image.open(args.image_path)
         train_transforms = transforms.Compose(
                     [
-                        transforms.Resize(1024, interpolation=transforms.InterpolationMode.BILINEAR),
-                        transforms.CenterCrop(1024),
-                        transforms.ToTensor(),
-                        transforms.Normalize([0.5], [0.5]),
+                    transforms.Resize((args.height, args.width), interpolation=transforms.InterpolationMode.BILINEAR),
+                    transforms.ToTensor(),
+                    transforms.Normalize([0.5], [0.5])
                     ]
                 )
 
         img = train_transforms(img).unsqueeze(0)
         dataloader = [img, args.source_prompt, args.target_prompt]
     else:
-        dataset = get_dataloader(args.eval_datasets)
+        default_transform = transforms.Compose(
+            [
+            transforms.Resize((args.height, args.width), interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.ToTensor(),
+            transforms.Normalize([0.5], [0.5])
+            ]
+        )
+
+        dataset = get_dataloader(args.eval_datasets,default_transform)
         dataloader = DataLoader(
             dataset,
             batch_size=1,          # 每批64个样本
@@ -333,6 +340,8 @@ def main(args):
     mean_clip_score = 0
     count = 0
     for img, source_prompt, target_prompt in dataloader:
+
+
         img = img.to(device).to(DTYPE)
         # vae encode
         img_latent = encode_imgs(img, pipe, DTYPE)
@@ -421,6 +430,9 @@ if __name__ == "__main__":
                         help='the path to save the feature ')
     parser.add_argument('--inject', type=int, default=5,
                         help='the number of timesteps which apply the feature sharing')
-    
+    parser.add_argument('--height', type=int, default=1024,
+                        help='输出图像的高度')
+    parser.add_argument('--width', type=int, default=1024,
+                        help='输出图像的宽度')      
     args = parser.parse_args()
     main(args)

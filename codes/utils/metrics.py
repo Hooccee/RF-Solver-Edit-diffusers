@@ -1,26 +1,61 @@
 import torch
-import clip
+from PIL import Image
+from torchvision import transforms
+import torchmetrics
+from torchmetrics.multimodal import CLIPScore
+from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
+from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+from torchmetrics.regression import MeanSquaredError
 
 class metircs:
-    def __init__(self, ):
+    def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        # clip score
-        model, preprocess = clip.load('ViT-B/32', device=self.device)
-        self.model = model
-        self.preprocess = preprocess
+        
+        # 初始化CLIP评分指标，用于测量图像与文本的相似度
+        self.clip_metric_calculator = CLIPScore(model_name_or_path="/data/chx/clip-vit-base-patch32").to(self.device)
+        
+        # 初始化MSE评分指标，用于测量像素级别的差异
+        self.mse_metric_calculator = MeanSquaredError().to(self.device)
+        
+        # 初始化PSNR评分指标，用于测量图像质量
+        self.psnr_metric_calculator = PeakSignalNoiseRatio(data_range=2.0).to(self.device)
+        
+        # 初始化LPIPS评分指标，用于测量感知相似度
+        self.lpips_metric_calculator = LearnedPerceptualImagePatchSimilarity(net_type='squeeze').to(self.device)
+        
 
-    def clip_scores(self, prompt, images):
+    def clip_scores(self,  image, txt):
+        # 逆向标准化 + 恢复像素范围
+        clip_transform = transforms.Compose([
+            # 逆向标准化: [-1,1] → [0,1]
+            transforms.Normalize(mean=[-1.0], std=[2.0]),
+            # 转换为 [0,255] 并调整维度顺序
+            transforms.Lambda(lambda x: (x * 255).type(torch.uint8)),
+        ])
 
-        text_tokens = clip.tokenize(prompt).to(self.device)
-        images = self.preprocess(images.convert("RGB")).unsqueeze(0).to(self.device)  # 预处理图像并添加批次维度，移动到设备上
+        image=clip_transform(image).to(self.device)
 
-        with torch.no_grad():
-            image_features = self.model.encode_image(images)
-            text_features = self.model.encode_text(text_tokens)
+        score = self.clip_metric_calculator(image, txt)
+        score = score.cpu().item()
+        return score
+    
+    def mse_scores(self, image1, image2):
 
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)  # 归一化>图像特征
-            text_features = text_features / text_features.norm(dim=-1, keepdim=True)  # 归一化文本特征
+        score =  self.mse_metric_calculator(image1.contiguous(),image2.contiguous())
+        score = score.cpu().item()
+        return score
 
-            similarity_scores = (image_features @ text_features.T).squeeze()  # 计算相似度得分（点积）
+    def psnr_scores(self, image1, image2):
 
-        return similarity_scores.mean().item()
+        score = self.psnr_metric_calculator(image1,image2)
+        score = score.cpu().item()
+        
+        return score
+
+    
+    def lpips_scores(self, image1, image2):
+
+        score =  self.lpips_metric_calculator(image1,image2)
+        score = score.cpu().item()
+        
+        return score

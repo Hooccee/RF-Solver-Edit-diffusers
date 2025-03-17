@@ -63,7 +63,8 @@ class PIE_Bench_dataset(Dataset):
         img = Image.open(image_path).convert('RGB')
         if self.transform:
             img = self.transform(img)
-        
+        #     print("if yes",img.shape)
+        # print("img.shape",img.shape)
         return (
             img,                       # 图像张量
             sample["source_prompt"],   # 字符串

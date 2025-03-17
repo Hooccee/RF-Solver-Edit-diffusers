@@ -4,11 +4,11 @@ import torch
 from torch import Tensor
 
 @torch.inference_mode()
-def decode_imgs(latents, pipeline):
+def decode_imgs(latents, pipeline,output_type):
     # vae image encoding
     imgs = (latents / pipeline.vae.config.scaling_factor) + pipeline.vae.config.shift_factor
     img_tensor = pipeline.vae.decode(imgs)[0]
-    imgs = pipeline.image_processor.postprocess(img_tensor, output_type="pil")
+    imgs = pipeline.image_processor.postprocess(img_tensor, output_type=output_type)
     return imgs
 
 @torch.inference_mode()
