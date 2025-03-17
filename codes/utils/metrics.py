@@ -29,7 +29,7 @@ class metircs:  #输入图像值范围均为[-1,1]
         clip_transform = transforms.Compose([
             # 逆向标准化: [-1,1] → [0,1]
             transforms.Normalize(mean=[-1.0], std=[2.0]),
-            # 转换为 [0,255] 并调整维度顺序
+            # 转换为 [0,255] 
             transforms.Lambda(lambda x: (x * 255).type(torch.uint8)),
         ])
 
