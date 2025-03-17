@@ -1,4 +1,4 @@
-python3 main_512.py \
+python3 main.py \
 	--model_path /data/chx/FLUX.1-dev_RF-Solver \
 	--eval-datasets PIE-Bench \
 	--height 512 \

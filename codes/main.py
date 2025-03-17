@@ -338,9 +338,13 @@ def main(args):
 
     # ******** evaluation **********
     mean_clip_score = 0
+    mean_mse_score = 0
+    mean_psnr_score = 0
+    mean_lpips_score = 0
     count = 0
-    for img, source_prompt, target_prompt in dataloader:
-
+    for img_float32, source_prompt, target_prompt in dataloader:
+        img_float32 = img_float32.to(device)
+        img = img_float32.to(DTYPE)
 
         img = img.to(device).to(DTYPE)
         # vae encode
@@ -375,12 +379,33 @@ def main(args):
         )
 
         # 将潜变量解码为图像
-        out = decode_imgs(img_latents, pipe)[0]
+        out = decode_imgs(img_latents, pipe,output_type="pil")[0]
+        out_latent_float32=transforms.Compose(
+                    [
+                    transforms.Resize((args.height, args.width), interpolation=transforms.InterpolationMode.BILINEAR),
+                    transforms.ToTensor(),
+                    transforms.Normalize([0.5], [0.5])
+                    ]
+                    )(out).unsqueeze(0).to(device)
 
-        # evaluation
-        clip_score = metrics.clip_scores(target_prompt, out)
+        # evaluation  img, out均为[-1,1]
+        # clip score
+        clip_score = metrics.clip_scores( out_latent_float32,target_prompt)
         print(f"==> clip score: {clip_score:.4f}")
         mean_clip_score += clip_score
+        # mse score
+        mse_score = metrics.mse_scores(img_float32, out_latent_float32)
+        print(f"==> mse score: {mse_score:.4f}")
+        mean_mse_score += mse_score
+        #psnr score
+        psnr_score = metrics.psnr_scores(img_float32, out_latent_float32)
+        print(f"==> psnr score: {psnr_score:.4f}")
+        mean_psnr_score += psnr_score
+        #lpips score
+        lpips_score = metrics.lpips_scores(img_float32, out_latent_float32)
+        print(f"==> lpips score: {lpips_score:.4f}")
+        mean_lpips_score += lpips_score
+
 
         count += 1
 
@@ -400,6 +425,13 @@ def main(args):
     print('######### Evaluation Results ###########')
     mean_clip_score = mean_clip_score / count
     print(f"==> clip score: {mean_clip_score:.4f}")
+    mean_mse_score = mean_mse_score / count
+    print(f"==> mse score: {mean_mse_score:.4f}")
+    mean_psnr_score = mean_psnr_score / count
+    print(f"==> psnr score: {mean_psnr_score:.4f}")
+    mean_lpips_score = mean_lpips_score / count
+    print(f"==> lpips score: {mean_lpips_score:.4f}")
+    print('#######################################')
 
     # 显式删除不再需要的变量
     pipe.maybe_free_model_hooks()
