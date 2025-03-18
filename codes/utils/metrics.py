@@ -21,7 +21,7 @@ class metircs:  #输入图像值范围均为[-1,1]
         self.psnr_metric_calculator = PeakSignalNoiseRatio(data_range=2.0).to(self.device)
         
         # 初始化LPIPS评分指标，用于测量感知相似度
-        self.lpips_metric_calculator = LearnedPerceptualImagePatchSimilarity(net_type='squeeze').to(self.device)
+        self.lpips_metric_calculator = LearnedPerceptualImagePatchSimilarity(net_type='vgg').to(self.device)
         
 
     def clip_scores(self,  image, txt):
