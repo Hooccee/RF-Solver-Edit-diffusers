@@ -962,11 +962,11 @@ def main(args):
 
     # ******** Loading pipeline **********
     pipe = RfSolverFluxPipeline.from_pretrained(args.model_path, torch_dtype=DTYPE)
-    pipe.to("cuda")
     # pipe.enable_model_cpu_offload()
     # pipe.enable_sequential_cpu_offload()
 
     pipe.transformer.set_attn_processor(RfSolverFluxAttnProcessor2_0_3opt())
+    pipe.to("cuda")
 
 
     # ******** Input processing **********
