@@ -1,4 +1,4 @@
-python3  main_8bit_3op_enhance.py \
+python3  main_3op_enhance.py \
     --model_path /data/chx/FLUX.1-dev_RF-Solver \
     --eval-datasets PIE-Bench \
     --height 512 \
