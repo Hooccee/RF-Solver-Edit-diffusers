@@ -1,0 +1,12 @@
+python3  main_8bit_3op_enhance.py \
+    --model_path /data/chx/FLUX.1-dev_RF-Solver \
+    --eval-datasets PIE-Bench \
+    --height 512 \
+    --width 512 \
+    --num_steps 30 \
+    --guidance_scale 3 \
+    --inject 9 \
+    --use_inversed_latents \
+    --nudge 1.05 \
+    --ilist_json_path ../ilist_data_token_data_PIE-Bench.json \
+    --output_dir /path/to/outputs 

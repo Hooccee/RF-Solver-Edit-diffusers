@@ -143,10 +143,10 @@ def main(args):
             except Exception as e:
                 print(f"图像转换失败: {str(e)}")
                 # 返回占位张量
-                return torch.zeros(3, 256, 256, dtype=torch.uint8)
+                return torch.zeros(3, args.height, args.width, dtype=torch.uint8)
             
     transform = transforms.Compose([
-                                    transforms.Resize((256, 256)),
+                                    transforms.Resize((args.height, args.width)),
                                     ToTensorWithoutScaling()  # 保持0-255范围
                                     ])
     

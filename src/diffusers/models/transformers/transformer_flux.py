@@ -924,7 +924,8 @@ class RfSolverFluxTransformer2DModel(ModelMixin,
         #print(f"txt_ids shape: {txt_ids.shape}", f"img_ids shape: {img_ids.shape}")
         ids = torch.cat((txt_ids, img_ids), dim=0)
         image_rotary_emb = self.pos_embed(ids)
-
+        cnt = 0
+        joint_attention_kwargs['type'] = 'double'
         for index_block, block in enumerate(self.transformer_blocks):
             if torch.is_grad_enabled() and self.gradient_checkpointing:
 
@@ -949,6 +950,7 @@ class RfSolverFluxTransformer2DModel(ModelMixin,
 
             else:
                 #print(f"image_rotary_emb shape: {(image_rotary_emb[0].shape, image_rotary_emb[1].shape)}")
+                joint_attention_kwargs['id'] = cnt
                 encoder_hidden_states, hidden_states = block(
                     hidden_states=hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
@@ -956,7 +958,7 @@ class RfSolverFluxTransformer2DModel(ModelMixin,
                     image_rotary_emb=image_rotary_emb,
                     joint_attention_kwargs=joint_attention_kwargs,
                 )
-
+                cnt += 1
             # controlnet residual
             if controlnet_block_samples is not None:
                 interval_control = len(self.transformer_blocks) / len(controlnet_block_samples)
@@ -968,10 +970,9 @@ class RfSolverFluxTransformer2DModel(ModelMixin,
                     )
                 else:
                     hidden_states = hidden_states + controlnet_block_samples[index_block // interval_control]
-        cnt = 0
 
         hidden_states = torch.cat([encoder_hidden_states, hidden_states], dim=1)
-
+        cnt = 0
         joint_attention_kwargs['type'] = 'single'
         #print("joint_attention_kwargs id:",id(joint_attention_kwargs))
         for index_block, block in enumerate(self.single_transformer_blocks):
