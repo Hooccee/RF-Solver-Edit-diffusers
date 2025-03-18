@@ -11,5 +11,5 @@ python3  main_3op_enhance.py \
     --ilist_json_path ../ilist_data_PIE-Bench.json \
     --output_dir ./outputs/3op_enhance \
     --test \
-    --enchanced \ 
+    --enhanced \ 
     --stable_flow
