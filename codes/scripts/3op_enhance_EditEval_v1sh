@@ -3,10 +3,13 @@ python3  main_3op_enhance.py \
     --eval-datasets EditEval_v1 \
     --height 1024 \
     --width 1024 \
-    --num_steps 30 \
+    --num-step 30 \
     --guidance_scale 3 \
     --inject 9 \
     --use_inversed_latents \
     --nudge 1.05 \
     --ilist_json_path ../ilist_data_EditEval_v1.json \
-    --output_dir /path/to/outputs 
+    --output_dir ./outputs/3op_enhance_EditEval_v1 \
+    --test \
+    --enchance \ 
+    --stable_flow
