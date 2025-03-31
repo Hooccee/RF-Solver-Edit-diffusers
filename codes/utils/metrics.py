@@ -22,7 +22,9 @@ class metircs:  #输入图像值范围均为[-1,1]
         
         # 初始化LPIPS评分指标，用于测量感知相似度
         self.lpips_metric_calculator = LearnedPerceptualImagePatchSimilarity(net_type='vgg').to(self.device)
-        
+
+        # 初始化SSIM评分指标，用于测量结构相似度
+        self.ssim_metric_calculator = StructuralSimilarityIndexMeasure(data_range=2.0).to(self.device)
 
     def clip_scores(self, image, txt):
         # 定义通用预处理流程（[-1,1] -> [0,255] uint8）
@@ -62,6 +64,12 @@ class metircs:  #输入图像值范围均为[-1,1]
     def lpips_scores(self, image1, image2):
 
         score =  self.lpips_metric_calculator(image1,image2)
+        score = score.cpu().item()
+        
+        return score
+    
+    def ssim_scores(self, image1, image2):
+        score = self.ssim_metric_calculator(image1,image2)
         score = score.cpu().item()
         
         return score
