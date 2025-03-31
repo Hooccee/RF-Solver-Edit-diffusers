@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = '2'
 import gc
 from typing import Any, Dict, Optional, Tuple, Union
 import torch
@@ -75,6 +75,9 @@ def interpolated_inversion(
     timesteps = timesteps[::-1]
     inject_list = inject_list[::-1]
     
+    pipeline.text_encoder_2.to('cpu')
+    pipeline.vae.to('cpu')
+    torch.cuda.empty_cache()   
     # 使用插值速度场进行图像反演
     with pipeline.progress_bar(total=len(timesteps)-1) as progress_bar:
         for i, (t_curr, t_prev) in enumerate(zip(timesteps[:-1], timesteps[1:])):
@@ -157,6 +160,7 @@ def interpolated_denoise(
     img_latents=None,
 ):
 
+    pipeline.text_encoder_2.to('cuda')
 
     # 编码提示文本
     prompt_embeds, pooled_prompt_embeds, text_ids = pipeline.encode_prompt(
@@ -205,7 +209,8 @@ def interpolated_denoise(
     guidance_vec = torch.full((packed_latents.shape[0],), guidance_scale, device=packed_latents.device, dtype=packed_latents.dtype)
     inject_list = [True] * joint_attention_kwargs['inject_step'] + [False] * (len(timesteps[:-1]) - joint_attention_kwargs['inject_step'])
 
-
+    pipeline.text_encoder_2.to('cpu')
+    torch.cuda.empty_cache()  
     # 使用插值速度场进行去噪
     with pipeline.progress_bar(total=len(timesteps)-1) as progress_bar:
         for i, (t_curr, t_prev) in enumerate(zip(timesteps[:-1], timesteps[1:])):
@@ -360,6 +365,7 @@ def main(args):
 
     # ******** evaluation **********
     mean_clip_score = 0
+    mean_clip_v_score = 0
     mean_mse_score = 0
     mean_psnr_score = 0
     mean_lpips_score = 0
@@ -402,6 +408,10 @@ def main(args):
         )
 
         print("img_latents_nudge:", calculate_ex_t_squared(img_latents))
+        torch.cuda.empty_cache()  
+        pipe.text_encoder_2.to('cpu')
+        pipe.vae.to('cuda')
+        torch.cuda.empty_cache() 
         # 将潜变量解码为图像
         out = decode_imgs(img_latents, pipe,output_type="pil")[0]
         out_latent_float32=transforms.Compose(
@@ -417,6 +427,10 @@ def main(args):
         clip_score = metrics.clip_scores( out_latent_float32,target_prompt)
         print(f"==> clip score: {clip_score:.4f}")
         mean_clip_score += clip_score
+
+        clip_v_score = metrics.clip_scores( out_latent_float32,img_float32)
+        print(f"==> clip-V score: {clip_v_score:.4f}")
+        mean_clip_v_score += clip_v_score
         # mse score
         mse_score = metrics.mse_scores(img_float32, out_latent_float32)
         print(f"==> mse score: {mse_score:.4f}")
@@ -449,6 +463,8 @@ def main(args):
     print('######### Evaluation Results ###########')
     mean_clip_score = mean_clip_score / count
     print(f"==> clip score: {mean_clip_score:.4f}")
+    mean_clip_v_score = mean_clip_v_score / count
+    print(f"==> clip-v score: {mean_clip_v_score:.4f}")   
     mean_mse_score = mean_mse_score / count
     print(f"==> mse score: {mean_mse_score:.4f}")
     mean_psnr_score = mean_psnr_score / count

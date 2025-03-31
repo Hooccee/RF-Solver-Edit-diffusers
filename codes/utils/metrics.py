@@ -24,21 +24,27 @@ class metircs:  #输入图像值范围均为[-1,1]
         self.lpips_metric_calculator = LearnedPerceptualImagePatchSimilarity(net_type='vgg').to(self.device)
         
 
-    def clip_scores(self,  image, txt):
-        # 逆向标准化 + 恢复像素范围
+    def clip_scores(self, image, txt):
+        # 定义通用预处理流程（[-1,1] -> [0,255] uint8）
         clip_transform = transforms.Compose([
-            # 逆向标准化: [-1,1] → [0,1]
-            transforms.Normalize(mean=[-1.0], std=[2.0]),
-            # 转换为 [0,255] 
-            transforms.Lambda(lambda x: (x * 255).type(torch.uint8)),
+            transforms.Normalize(mean=[-1.0], std=[2.0]),      # 逆向标准化到[0,1]
+            transforms.Lambda(lambda x: (x * 255).clamp(0,255)), # 转换为0-255范围
+            transforms.Lambda(lambda x: x.type(torch.uint8)),   # 转换为uint8类型
         ])
 
-        image=clip_transform(image).to(self.device)
+        # 处理第一个图像参数（始终是Tensor）
+        processed_img = clip_transform(image).to(self.device)
 
-        score = self.clip_metric_calculator(image, txt)
-        score = score.cpu().item()
-        return score
-    
+        # 根据第二个参数类型动态处理
+        if isinstance(txt, torch.Tensor):  # 输入是图像对
+            processed_txt = clip_transform(txt).to(self.device)
+        else:                              # 输入是文本
+            processed_txt = txt  # 保持字符串原样
+
+        # 统一计算CLIP分数
+        score = self.clip_metric_calculator(processed_img, processed_txt)
+        return score.cpu().item()
+        
     def mse_scores(self, image1, image2):
 
         score =  self.mse_metric_calculator(image1.contiguous(),image2.contiguous())

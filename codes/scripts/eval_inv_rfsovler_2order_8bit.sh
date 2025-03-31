@@ -1,11 +1,11 @@
 python3 main_8bit.py \
 	--model_path /data/chx/FLUX.1-dev_RF-Solver \
-	--eval-datasets PIE-Bench \
-	--height 512 \
-	--width 512 \
+	--eval-datasets EditEval_v1 \
+	--height 1024 \
+	--width 1024 \
 	--num-step 30 \
     --guidance 2 \
     --inject 5 \
 	--use_inversed_latents \
-	--output_dir /data/chx/PIE-Bench_output_512 \
+	--output_dir /data/chx/EditEval_v1_output \
 

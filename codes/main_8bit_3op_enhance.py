@@ -170,6 +170,8 @@ class RfSolverFluxAttnProcessor2_0_3opt:
             if test:
                 if feature_operate:
                     if stable_flow: 
+
+
                         if inject and id in [
                             # 0,
                             1,2,
@@ -209,6 +211,21 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                                 feature[feature_name2] = x
                             else:
                                 key[:, :, 512:, :] = feature[feature_name2].cuda()
+
+###########################3.20测试代码#############
+                        if t==1.0:
+                            
+                            if inject and ( id in [
+                                6, 9, 
+                                30,32,33,34, 35,36, 37] )and type=='single':
+                                # is_inject = True
+                                feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'V'
+                                if inverse:
+                                    x=value.cpu()
+                                    x  = x [:, :, 512:, :]
+                                    feature[feature_name] = x
+                                else:
+                                    value[:, :, 512:, :] = feature[feature_name].cuda()
 ##############################################################
             
             if attn_map_out:
@@ -453,7 +470,12 @@ class RfSolverFluxAttnProcessor2_0_3opt:
 
 
             if test and inverse == False and enhanced and inject and is_inject and t<=0.96 and t>=0.85:
-                hidden_states = enhanced_scaled_dot_product_attention(query, key, value, alpha=5, v=3, i_list=enhanced_list,K=5)
+
+###########################3.20测试代码#############
+
+
+###################################################
+                hidden_states = enhanced_scaled_dot_product_attention(query, key, value, alpha=3, v=3, i_list=enhanced_list,K=5)
             else:
                 hidden_states = F.scaled_dot_product_attention(query, key, value, dropout_p=0.0, is_causal=False)
 
@@ -485,20 +507,21 @@ def interpolated_inversion(
     joint_attention_kwargs,
     num_steps=28,
     use_shift_t_sampling=True, 
-    source_prompt="",
+    t5_prompt="",
+    clip_prompt="",
     guidance_scale = 1.0
 ):
 
 
     # 源文本提示
     prompt_embeds, pooled_prompt_embeds, text_ids = pipeline.encode_prompt(
-        prompt=source_prompt, 
-        prompt_2=source_prompt
+        prompt=t5_prompt, 
+        prompt_2=clip_prompt
     )
 
     # 源文本提示T5 tokenizer_2输出
     source_text_inputs = pipeline.tokenizer_2(
-        source_prompt,
+        t5_prompt,
         padding="max_length",
         max_length=512,
         truncation=True,
@@ -1022,6 +1045,7 @@ def main(args):
 
     # ******** evaluation **********
     mean_clip_score = 0
+    mean_clip_v_score = 0
     mean_mse_score = 0
     mean_psnr_score = 0
     mean_lpips_score = 0
@@ -1050,18 +1074,19 @@ def main(args):
         
         #nudge 标量偏移
         if args.nudge != 1:
-            img_latent = img_latent*args.nudge
+            img_latent_nudge = img_latent*args.nudge
             print("img_latent_nudge:", calculate_ex_t_squared(img_latent))
 
         if args.use_inversed_latents:
             # 进行反演1
             inversed_latent_s ,joint_attention_kwargs = interpolated_inversion(
                 pipe, 
-                img_latent, 
+                img_latent*1.15, 
                 DTYPE=DTYPE, 
                 num_steps=args.num_steps, 
                 use_shift_t_sampling=True,
-                source_prompt=source_prompt,
+                t5_prompt=source_prompt,
+                clip_prompt=source_prompt,
                 guidance_scale = 1.5,
                 joint_attention_kwargs=joint_attention_kwargs)    
         else:
@@ -1072,11 +1097,12 @@ def main(args):
             # 进行反演2
             inversed_latent_t ,joint_attention_kwargs = interpolated_inversion(
                 pipe, 
-                img_latent*1.15, 
+                img_latent_nudge,
                 DTYPE=DTYPE, 
                 num_steps=args.num_steps, 
                 use_shift_t_sampling=True,
-                source_prompt=target_prompt,
+                t5_prompt=target_prompt,
+                clip_prompt=source_prompt,
                 guidance_scale = 1,
                 joint_attention_kwargs=joint_attention_kwargs)    
         else:
@@ -1115,8 +1141,12 @@ def main(args):
         # evaluation  img, out均为[-1,1]
         # clip score
         clip_score = metrics.clip_scores( out_latent_float32,target_prompt)
-        print(f"==> clip score: {clip_score:.4f}")
+        print(f"==> clip-T score: {clip_score:.4f}")
         mean_clip_score += clip_score
+
+        clip_v_score = metrics.clip_scores( out_latent_float32,img_float32)
+        print(f"==> clip-V score: {clip_v_score:.4f}")
+        mean_clip_v_score += clip_v_score
         # mse score
         mse_score = metrics.mse_scores(img_float32, out_latent_float32)
         print(f"==> mse score: {mse_score:.4f}")
@@ -1129,6 +1159,7 @@ def main(args):
         lpips_score = metrics.lpips_scores(img_float32, out_latent_float32)
         print(f"==> lpips score: {lpips_score:.4f}")
         mean_lpips_score += lpips_score
+
 
 
         count += 1
@@ -1144,11 +1175,13 @@ def main(args):
             output_path = f"{base}_{counter}{ext}"
             counter += 1
         out.save(output_path)
-        print(f"已保存输出图像到 {output_path}，参数为:num_steps={args.num_steps} inject={args.inject} inversed={args.use_inversed_latents} guidance_scale={args.guidance_scale}")
+        print(f"已保存输出图像到 {output_path}，参数为:num_steps={args.num_steps} inject={args.inject} inversed={args.use_inversed_latents} guidance_scale={args.guidance_scale} nudge={args.nudge}")
 
     print('######### Evaluation Results ###########')
     mean_clip_score = mean_clip_score / count
-    print(f"==> clip score: {mean_clip_score:.4f}")
+    print(f"==> clip-T score: {mean_clip_score:.4f}")
+    mean_clip_v_score = mean_clip_v_score / count
+    print(f"==> clip-v score: {mean_clip_v_score:.4f}")    
     mean_mse_score = mean_mse_score / count
     print(f"==> mse score: {mean_mse_score:.4f}")
     mean_psnr_score = mean_psnr_score / count
