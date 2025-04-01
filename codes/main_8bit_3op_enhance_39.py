@@ -1049,6 +1049,8 @@ def main(args):
     mean_mse_score = 0
     mean_psnr_score = 0
     mean_lpips_score = 0
+    mean_ssim_score = 0
+    mean_dino_score = 0
     count = 0
 
     # 添加JSON文件路径（需要根据实际情况调整路径）
@@ -1145,7 +1147,7 @@ def main(args):
         mean_clip_score += clip_score
 
         clip_v_score = metrics.clip_scores( out_latent_float32,img_float32)
-        print(f"==> clip-V score: {clip_v_score:.4f}")
+        print(f"==> clip-I score: {clip_v_score:.4f}")
         mean_clip_v_score += clip_v_score
         # mse score
         mse_score = metrics.mse_scores(img_float32, out_latent_float32)
@@ -1159,6 +1161,14 @@ def main(args):
         lpips_score = metrics.lpips_scores(img_float32, out_latent_float32)
         print(f"==> lpips score: {lpips_score:.4f}")
         mean_lpips_score += lpips_score
+        #ssim score
+        ssim_score = metrics.ssim_scores(img_float32, out_latent_float32)
+        print(f"==> ssim score: {ssim_score:.4f}")
+        mean_ssim_score += ssim_score
+        #dino score
+        dino_score = metrics.dino_scores(img_float32, out_latent_float32)
+        print(f"==> dino score: {dino_score:.4f}")
+        mean_dino_score += dino_score
 
 
 
@@ -1181,13 +1191,17 @@ def main(args):
     mean_clip_score = mean_clip_score / count
     print(f"==> clip-T score: {mean_clip_score:.4f}")
     mean_clip_v_score = mean_clip_v_score / count
-    print(f"==> clip-v score: {mean_clip_v_score:.4f}")    
+    print(f"==> clip-I score: {mean_clip_v_score:.4f}")    
     mean_mse_score = mean_mse_score / count
     print(f"==> mse score: {mean_mse_score:.4f}")
     mean_psnr_score = mean_psnr_score / count
     print(f"==> psnr score: {mean_psnr_score:.4f}")
     mean_lpips_score = mean_lpips_score / count
     print(f"==> lpips score: {mean_lpips_score:.4f}")
+    mean_ssim_score = mean_ssim_score / count
+    print(f"==> ssim score: {mean_ssim_score:.4f}")
+    mean_dino_score = mean_dino_score / count
+    print(f"==> dino score: {mean_dino_score:.4f}")
     print('#######################################')
 
     # 显式删除不再需要的变量

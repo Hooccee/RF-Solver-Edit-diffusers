@@ -394,11 +394,11 @@ def main(args):
         # evaluation  img, out均为[-1,1]
         # clip score
         clip_score = metrics.clip_scores( out_latent_float32,target_prompt)
-        print(f"==> clip score: {clip_score:.4f}")
+        print(f"==> clip-T score: {clip_score:.4f}")
         mean_clip_score += clip_score
         # clip v score
         clip_v_score = metrics.clip_scores( img_float32,out_latent_float32)
-        print(f"==> clip v score: {clip_v_score:.4f}")
+        print(f"==> clip-I score: {clip_v_score:.4f}")
         mean_clip_v_score += clip_v_score
         # mse score
         mse_score = metrics.mse_scores(img_float32, out_latent_float32)
@@ -441,7 +441,7 @@ def main(args):
     mean_clip_score = mean_clip_score / count
     print(f"==> clip-T score: {mean_clip_score:.4f}")
     mean_clip_v_score = mean_clip_v_score / count
-    print(f"==> clip-v score: {mean_clip_v_score:.4f}")    
+    print(f"==> clip-I score: {mean_clip_v_score:.4f}")    
     mean_mse_score = mean_mse_score / count
     print(f"==> mse score: {mean_mse_score:.4f}")
     mean_psnr_score = mean_psnr_score / count
