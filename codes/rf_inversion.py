@@ -1,4 +1,5 @@
 import os
+from re import I
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 import gc
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -164,10 +165,13 @@ def main(args):
     # 评估指标初始化
     metrics = {
         'clip_score': 0.0,
+        'clip_score_i': 0.0,
         'mse': 0.0,
         'psnr': 0.0,
         'lpips': 0.0,
-        'ssim': 0.0
+        'ssim': 0.0,
+        'dino': 0.0,
+
     }
     metric_calculator = metircs()
     
@@ -177,6 +181,9 @@ def main(args):
         # 处理批量数据
         batch_metrics = {
                         'clip_score': 0.0,
+                        'clip_score_i': 0.0,
+                        'ssim': 0.0,
+                        'dino': 0.0,
                         'mse': 0.0,
                         'psnr': 0.0,
                         'lpips': 0.0,
@@ -214,25 +221,34 @@ def main(args):
                 # try:
                 # 分别计算各指标
                 clip_score = metric_calculator.clip_scores(edited_tensor, target_prompts[idx])
+                clip_score_i = metric_calculator.clip_scores(edited_tensor, orig_tensor)
                 mse = metric_calculator.mse_scores(edited_tensor, orig_tensor)
                 psnr_val = metric_calculator.psnr_scores(edited_tensor, orig_tensor)
                 lpips_val = metric_calculator.lpips_scores(edited_tensor, orig_tensor)
+                ssim_val = metric_calculator.ssim_scores(edited_tensor, orig_tensor)
+                dino_val = metric_calculator.dino_scores(edited_tensor, orig_tensor)
                 
                 # 打印样本级指标
 
                 print(f"\nSample {batch_idx}-{idx} Metrics:")
                 print(source_prompts[idx])
                 print(target_prompts[idx])
-                print(f"CLIP Score: {clip_score:.4f}")
+                print(f"CLIP Score-T: {clip_score:.4f}")
+                print(f"CLIP Score-I: {clip_score_i:.4f}")
                 print(f"MSE: {mse:.4f}")
                 print(f"PSNR: {psnr_val:.4f} dB")
                 print(f"LPIPS: {lpips_val:.4f}")
+                print(f"SSIM: {ssim_val:.4f}")
+                print(f"DINO: {dino_val:.4f}")
                 
                 # 累加到批指标
                 batch_metrics['clip_score'] += clip_score
+                batch_metrics['clip_score_i'] += clip_score_i
                 batch_metrics['mse'] += mse
                 batch_metrics['psnr'] += psnr_val
                 batch_metrics['lpips'] += lpips_val
+                batch_metrics['ssim'] += ssim_val
+                batch_metrics['dino'] += dino_val
                 batch_metrics['count'] += 1
 
                 # except Exception as e:
@@ -295,7 +311,7 @@ if __name__ == "__main__":
     parser.add_argument("--quant_4bit", action="store_true")
     
     # 数据参数
-    parser.add_argument("--eval_dataset", type=str, required=True)
+    parser.add_argument("--eval_dataset", type=str,default='', help='选择要编辑的数据集: EditEval_v1, PIE-Bench')
     parser.add_argument("--height", type=int, default=1024)
     parser.add_argument("--width", type=int, default=1024)
     parser.add_argument("--batch_size", type=int, default=4)

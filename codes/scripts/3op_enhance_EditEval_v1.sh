@@ -1,8 +1,8 @@
 python3  main_3op_enhance_39.py \
-    --model_path /data/chx/FLUX.1-dev_RF-Solver \
-    --eval-datasets PIE-Bench \
-    --height 512     \
-    --width 512     \
+    --model_path /data/chx/FLUX.1-dev_RF-Solver     \
+    --eval-datasets EditEval_v1     \
+    --height 1024     \
+    --width 1024     \
     --num-step 30     \
     --guidance_scale 3.5     \
     --inject 8     \
