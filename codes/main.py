@@ -300,10 +300,10 @@ def main(args):
 
     # ******** Loading pipeline **********
     pipe = RfSolverFluxPipeline.from_pretrained(args.model_path, torch_dtype=DTYPE)
-    #pipe.to(device)
-    print(pipe.hf_device_map)
-    #pipe.enable_model_cpu_offload()
-    pipe.enable_sequential_cpu_offload()
+    pipe.to(device)
+    # print(pipe.hf_device_map)
+    # pipe.enable_model_cpu_offload()
+    # pipe.enable_sequential_cpu_offload()
 
     # ******** Input processing **********
     if args.eval_datasets == '':

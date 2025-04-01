@@ -575,9 +575,9 @@ def interpolated_inversion(
     timesteps = timesteps[::-1]
     inject_list = inject_list[::-1]
 
-    pipeline.text_encoder_2.to('cpu')
-    pipeline.vae.to('cpu')
-    torch.cuda.empty_cache()   
+    # pipeline.text_encoder_2.to('cpu')
+    # pipeline.vae.to('cpu')
+    # torch.cuda.empty_cache()   
     # 使用三阶 Runge-Kutta 方法进行图像反演
     with pipeline.progress_bar(total=len(timesteps)-1) as progress_bar:
         for i, (t_curr, t_prev) in enumerate(zip(timesteps[:-1], timesteps[1:])):
@@ -680,7 +680,7 @@ def interpolated_denoise(
     use_shift_t_sampling=True, 
 ):
 
-    pipeline.text_encoder_2.to('cuda')
+    # pipeline.text_encoder_2.to('cuda')
 
     # 编码提示文本
     prompt_embeds, pooled_prompt_embeds, text_ids = pipeline.encode_prompt(
@@ -749,8 +749,8 @@ def interpolated_denoise(
     guidance_vec = torch.full((packed_latents.shape[0],), guidance_scale, device=packed_latents.device, dtype=packed_latents.dtype)
     inject_list = [True] * joint_attention_kwargs['inject_step'] + [False] * (len(timesteps[:-1]) - joint_attention_kwargs['inject_step'])
 
-    pipeline.text_encoder_2.to('cpu')
-    torch.cuda.empty_cache()  
+    # pipeline.text_encoder_2.to('cpu')
+    # torch.cuda.empty_cache()  
     # 使用三阶 Runge-Kutta进行去噪
     with pipeline.progress_bar(total=len(timesteps)-1) as progress_bar:
         for i, (t_curr, t_prev) in enumerate(zip(timesteps[:-1], timesteps[1:])):
@@ -984,33 +984,22 @@ def main(args):
     metrics = metircs()
 
     # ******** Loading pipeline **********
-    quant_config = DiffusersBitsAndBytesConfig(load_in_8bit=True,)
-    transformer_8bit = RfSolverFluxTransformer2DModel.from_pretrained(
-        args.model_path,
-        subfolder="transformer",
-        quantization_config=quant_config,
-        torch_dtype=torch.bfloat16,
-    )
-    pipe = RfSolverFluxPipeline.from_pretrained(args.model_path, torch_dtype=DTYPE,transformer=transformer_8bit)
-    print(pipe.hf_device_map)
-    pipe.enable_model_cpu_offload()
-    #pipe.enable_sequential_cpu_offload()
+    # quant_config = DiffusersBitsAndBytesConfig(load_in_8bit=True,)
+    # transformer_8bit = RfSolverFluxTransformer2DModel.from_pretrained(
+    #     args.model_path,
+    #     subfolder="transformer",
+    #     quantization_config=quant_config,
+    #     torch_dtype=torch.bfloat16,
+    # )
+    # pipe = RfSolverFluxPipeline.from_pretrained(args.model_path, torch_dtype=DTYPE,transformer=transformer_8bit)
+    # print(pipe.hf_device_map)
+    # pipe.enable_model_cpu_offload()
+    # #pipe.enable_sequential_cpu_offload()
+    pipe = RfSolverFluxPipeline.from_pretrained(args.model_path, torch_dtype=DTYPE)
+    pipe.to(device)
 
     pipe.transformer.set_attn_processor(RfSolverFluxAttnProcessor2_0_3opt())
 
-
-    # my_attn = RfSolverAttention(
-    #             query_dim=dim,
-    #             cross_attention_dim=None,
-    #             dim_head=attention_head_dim,
-    #             heads=num_attention_heads,
-    #             out_dim=dim,
-    #             bias=True,
-    #             processor=processor,
-    #             qk_norm="rms_norm",
-    #             eps=1e-6,
-    #             pre_only=True,
-    #         )
 
     # ******** Input processing **********
     if args.eval_datasets == '':
@@ -1125,10 +1114,10 @@ def main(args):
         )
 
         print("img_latents_nudge:", calculate_ex_t_squared(img_latents))
-        torch.cuda.empty_cache()  
-        pipe.text_encoder_2.to('cpu')
-        pipe.vae.to('cuda')
-        torch.cuda.empty_cache() 
+        # torch.cuda.empty_cache()  
+        # pipe.text_encoder_2.to('cpu')
+        # pipe.vae.to('cuda')
+        # torch.cuda.empty_cache() 
 
         # 将潜变量解码为图像
         out = decode_imgs(img_latents, pipe,output_type="pil")[0]
