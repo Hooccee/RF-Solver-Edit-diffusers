@@ -1408,9 +1408,9 @@ if __name__ == "__main__":
     parser.add_argument('--nudge_source', type=float, default=1.15, help='source inv分支潜变量标量偏移')
     parser.add_argument('--K', type=int, default=5, help='SVD TopK 基数')
     parser.add_argument('--alpha', type=float, default=3, help='SVD 增强 注意力权重放大系数')
-    parser.add_argument('--v: ', type=float, default=3, help='SVD 增强 Sigmoid斜率系数')
-    parser.add_argument('--SVD_start: ', type=float, default=0.96, help='SVD 增强 开始时间(denoise t 从1.0到0.0)')
-    parser.add_argument('--SVD_end: ', type=float, default=0.85, help='SVD 增强 结束时间(denoise t 从1.0到0.0)')
+    parser.add_argument('--v', type=float, default=3, help='SVD 增强 Sigmoid斜率系数')
+    parser.add_argument('--SVD_start', type=float, default=0.96, help='SVD 增强 开始时间(denoise t 从1.0到0.0)')
+    parser.add_argument('--SVD_end', type=float, default=0.85, help='SVD 增强 结束时间(denoise t 从1.0到0.0)')
 
 
     args = parser.parse_args()

@@ -1396,7 +1396,6 @@ if __name__ == "__main__":
     parser.add_argument('--attn_map_out_path', type=str, default='attn_map_out',
                         help='the path to save the attn_map ')    
     parser.add_argument('--stable_flow', action='store_true', help='切换至stable_flow方法进行inject')
-    parser.add_argument('--nudge', type=float, default=1, help='潜变量标量偏移1.15')
     parser.add_argument('--test', action='store_true', help='切换至test 实验方法 进行inject')
     parser.add_argument('--enhanced', action='store_true', help='切换至enhancedt 实验方法 进行多头增强')
 
