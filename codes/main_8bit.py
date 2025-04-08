@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '2'
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 import gc
 from typing import Any, Dict, Optional, Tuple, Union
 import torch
