@@ -5,7 +5,7 @@ python3  main_3op_enhance_39_SVD.py \
     --width 512     \
     --num-step 30     \
     --use_inversed_latents     \
-    --ilist_json_path ./ilist_data_EditEval_v1.json     \
+    --ilist_json_path ./ilist_data_PIE-Bench.json     \
     --output_dir ./outputs/3op_enhance_PIE-Bench_SVD     \
     --test     \
     --enhanced     \
