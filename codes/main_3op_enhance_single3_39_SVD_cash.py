@@ -1091,12 +1091,16 @@ def main(args):
 
 #*******************************************************************************
             # 保存和加载部分
-            if inversed_latent_s is None and joint_attention_kwargs is not None:
+            if inversed_latent_s is not None and joint_attention_kwargs is not None:
                 # 计算全局索引
-                global_idx = start_index + count if args.eval_datasets else count
+                global_idx = start_index + count if (hasattr(args, 'eval_datasets') and args.eval_datasets) else count
                 
-                # 保存反演潜在变量
-                latent_save_path = f"/data/chx/3op_data/inversed_latent_s/inversed_latent_{global_idx}.pt"
+                # 准备保存路径
+                latent_dir = os.path.join(args.output_dir, "/3op_data/inversed_latent_s")
+                os.makedirs(latent_dir, exist_ok=True)  # 确保目录存在
+                
+                # 保存文件
+                latent_save_path = os.path.join(latent_dir, f"inversed_latent_{global_idx}.pt")
                 # torch.save(inversed_latent_s.cpu(), latent_save_path)
                 # print(f"已保存反演潜在变量{global_idx}到 {latent_save_path}")
                 
@@ -1307,6 +1311,8 @@ if __name__ == "__main__":
     parser.add_argument('--v', type=float, default=3, help='SVD 增强 Sigmoid斜率系数')
     parser.add_argument('--SVD_start', type=float, default=0.96, help='SVD 增强 开始时间(denoise t 从1.0到0.0)')
     parser.add_argument('--SVD_end', type=float, default=0.85, help='SVD 增强 结束时间(denoise t 从1.0到0.0)')
+    parser.add_argument('--cash_dir', type=str, default='outputs', help='保存输出cash的目录')
+
 
 
     args = parser.parse_args()
