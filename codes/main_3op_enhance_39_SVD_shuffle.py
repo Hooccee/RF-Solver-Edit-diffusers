@@ -1143,18 +1143,48 @@ def main(args):
                     transforms.Normalize([0.5], [0.5])
                     ]
                 )
-        dataset = get_dataloader(args.eval_datasets, default_transform)
+        
+        # 加载原始数据集
+        full_dataset = get_dataloader(args.eval_datasets, default_transform)
+        full_length = len(full_dataset)
+
+        # 生成全量随机排列索引
+        shuffled_indices = torch.randperm(full_length).tolist()  # 先打乱所有样本的索引
+
+        # 处理子集参数
+        
+        if args.num_samples is not None:
+            if args.num_samples <= 0:
+                raise ValueError("--num-samples 必须大于0")
+            if args.num_samples > full_length:
+                raise ValueError(f"--num-samples {args.num_samples} 超过数据集总长度 {full_length}")
+            selected_indices = shuffled_indices[:args.num_samples]  # 取打乱后的前N个
+        
+
+        elif args.subset_range is not None:
+            start, end = args.subset_range
+            if start < 0 or end <= start:
+                raise ValueError("--subset-range 参数不合法，必须满足 START >=0 且 END > START")
+            if end > full_length:
+                raise ValueError(f"END 值 {end} 超过数据集总长度 {full_length}")
+            selected_indices = shuffled_indices[start:end]  # 取打乱后的区间
+
+
+        else:
+            # 使用全部打乱后的数据
+            selected_indices = shuffled_indices
+
+        # 创建子集数据集
+        dataset = torch.utils.data.Subset(full_dataset, selected_indices)
+
+        # 创建DataLoader（注意shuffle=False）
         dataloader = DataLoader(
             dataset,
-            batch_size=1,          # 每批64个样本
-            shuffle=False,           # 训练时打乱数据
-            num_workers=8,          # 使用4个子进程加载数据
-            pin_memory=True         # 如果使用GPU，可以加速数据传输
+            batch_size=1,
+            shuffle=False,  # 已在全局打乱，无需再打乱
+            num_workers=8,
+            pin_memory=True
         )
-        
-        # 加载ilist配置
-        with open(args.ilist_json_path, 'r') as f:
-            ilist_entries = json.load(f)
     
     else:
         # 单张图片模式
@@ -1376,7 +1406,11 @@ if __name__ == "__main__":
                       help='编辑目标描述（单张图片模式必需）')
     parser.add_argument('--enhanced_list', type=int, nargs='+', default=[],
                       help='增强层/步骤列表 （用空格分隔多个数字）（单张图片模式专用）')
-
+    # 部分数据选择参数
+    parser.add_argument('--num-samples', type=int, 
+                    help='处理数据集的前N个样本（仅数据集模式有效）')
+    parser.add_argument('--subset-range', type=int, nargs=2, metavar=('START', 'END'),
+                    help='处理指定索引范围的数据（包含START，不包含END，仅数据集模式有效）')
 
     parser.add_argument('--model_path', type=str, default='/root/autodl-tmp/Flux-dev', help='预训练模型的路径')
     parser.add_argument('--output_dir', type=str, default='outputs', help='保存输出图像的目录')
