@@ -3,6 +3,7 @@ import torchvision.transforms as transforms
 
 from .EditEval_v1 import EditEval_v1_dataset
 from .PIE_Bench import PIE_Bench_dataset
+from .PIE_Bench_shuffle import PIE_Bench_dataset_shauffle
 
 
 
@@ -11,3 +12,5 @@ def get_dataloader(dataset_name,default_transform=None):
         return EditEval_v1_dataset(transform=default_transform)
     if dataset_name == 'PIE-Bench':
         return PIE_Bench_dataset(transform=default_transform)
+    if dataset_name == 'PIE-Bench_shuffle':
+        return PIE_Bench_dataset_shauffle(transform=default_transform)

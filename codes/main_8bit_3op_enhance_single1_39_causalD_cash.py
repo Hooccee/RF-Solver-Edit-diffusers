@@ -1293,16 +1293,16 @@ def main(args):
     target_prompts_list = []
     for img_float32, source_prompt, target_prompt in dataloader_full:
         target_prompts_list.extend(target_prompt)  # 直接扩展列表
-        print("target_prompt", target_prompt)
-    print("target_prompts_list.len=", len(target_prompts_list))
-    print("target_prompts_list", target_prompts_list)
+    #     print("target_prompt", target_prompt)
+    # print("target_prompts_list.len=", len(target_prompts_list))
+    # print("target_prompts_list", target_prompts_list)
 
     for img_float32, source_prompt, target_prompt in dataloader:
 
 
         for single_target_prompt in target_prompt:
             target_prompts_list = [p for p in target_prompts_list if p != single_target_prompt]
-        print("当前剩余:", len(target_prompts_list))
+        # print("当前剩余:", len(target_prompts_list))
 
 
         def sample_evenly_spaced(target_list, K):
@@ -1323,7 +1323,8 @@ def main(args):
             indices = np.linspace(0, N-1, num=K, dtype=int).tolist()  # 生成等距索引
             return [target_list[i] for i in indices]
         
-        sampled_list = sample_evenly_spaced(target_prompts_list, num=args.target_var_num)
+        target_var_list = sample_evenly_spaced(target_prompts_list, K=args.target_var_num)
+        print("target_var_list", target_var_list)
 
 
         # 计算全局索引
