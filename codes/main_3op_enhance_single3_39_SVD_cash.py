@@ -1320,4 +1320,4 @@ if __name__ == "__main__":
 
     #python main_3op_enhance_39_SVD.py --image_path /root/autodl-tmp/Flux-dev/test.png --source-prompt "a cat" --target-prompt "a dog" --enhanced_list 0 1 2 3 4 5 6 7 --num-steps 30 --inject 8 --use_inversed_latents --guidance_scale 3.5 --nudge_source 1.5 --nudge 1.05 --K 5 --alpha 3 --v 3 --SVD_start 0.96 --SVD_end 0.85
     
-    #python main_3op_enhance_39_SVD.py --eval-datasets EditEval_v1 --ilist_json_path /root/autodl-tmp/Flux-dev/ilist.json --num-steps 30 --inject 8 --use_inversed_latents --guidance_scale 3.5 --nudge_source 1.5 --nudge 1.05 --K 5 --alpha 3 --v 3 --SVD_start 0.96 --SVD_end 0.85
+    #python main_3op_enhance_39_SVD.py --eval-datasets EditEval_v1 --ilist_json_path /root/autodl-tmp/Flux-dev/ilist.json --num-steps 30 --inject 8 --use_inversed_latents --guidance_scale 3.5 --nudge_source 1.15 --nudge 1.05 --K 5 --alpha 3 --v 3 --SVD_start 0.96 --SVD_end 0.85
