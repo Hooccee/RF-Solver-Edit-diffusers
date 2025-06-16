@@ -14,7 +14,7 @@ class metircs:  # 输入图像值范围均为[-1,1]
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
         # 初始化CLIP评分指标
-        self.clip_metric_calculator = CLIPScore(model_name_or_path="/data/chx/clip-vit-base-patch32").to(self.device)
+        self.clip_metric_calculator = CLIPScore(model_name_or_path="/mmu-vcg-hdd/caohaoxiang/openai/clip-vit-base-patch32").to(self.device)
         
         # 初始化MSE评分指标
         self.mse_metric_calculator = MeanSquaredError().to(self.device)
@@ -29,7 +29,7 @@ class metircs:  # 输入图像值范围均为[-1,1]
         self.ssim_metric_calculator = StructuralSimilarityIndexMeasure(data_range=2.0).to(self.device)
 
         # 加载DINOv2模型和处理器
-        model_folder = '/data/chx/dinov2-base'
+        model_folder = '/mmu-vcg-hdd/caohaoxiang/dinov2-base'
         self.dino_processor = AutoImageProcessor.from_pretrained(model_folder)
         self.dino_model = AutoModel.from_pretrained(model_folder).to(self.device)
         self.dino_model.eval()

@@ -1,9 +1,10 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = '6'
 import gc
 from typing import Any, Dict, Optional, Tuple, Union
 import torch
 import math
 import argparse
-import os
 
 from PIL import Image
 from diffusers import FluxPipeline,RfSolverFluxPipeline, RfSolverFluxTransformer2DModel
@@ -14,12 +15,12 @@ import logging
 
 from diffusers import BitsAndBytesConfig as DiffusersBitsAndBytesConfig
 from transformers import BitsAndBytesConfig as TransformersBitsAndBytesConfig
-from datasets import get_dataloader
+from mydatasets import get_dataloader
 
 from utils.utils import *
 from utils.metrics import *
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+
 
 logger = logging.getLogger(__name__)   # pylint: disable=invalid-name
 
@@ -466,7 +467,7 @@ if __name__ == "__main__":
     parser.add_argument('--model_path', type=str, default='/root/autodl-tmp/Flux-dev', help='预训练模型的路径')
     parser.add_argument('--image_path', type=str, default='./example/image.png', help='输入图像的路径')
     parser.add_argument('--eval-datasets', type=str, default='', help='选择要编辑的数据集：EditEval_v1, PIE-Bench')
-    parser.add_argument('--output_dir', type=str, default='outputs', help='保存输出图像的目录')
+    parser.add_argument('--output_dir', type=str, default='outputs/rfsolver_emu_edit_test_set', help='保存输出图像的目录')
     parser.add_argument('--use_inversed_latents', action='store_true', help='使用反转潜变量')
     parser.add_argument('--guidance_scale', type=float, default=3.5, help='interpolated_denoise 的引导比例')
     parser.add_argument('--num-steps', type=int, default=30, help='时间步长的数量')

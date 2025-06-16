@@ -1,5 +1,7 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = '4'
+import wandb
+import datetime
 import time  
 import gc
 import psutil
@@ -104,13 +106,13 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                                 17, 18] and type=='double':
                                 feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'Q'
                                 if inverse:
-                                    feature[feature_name] = query.cpu()
+                                    feature[feature_name] = query#.cpu()
                                 else:
                                     query =feature[feature_name].cuda()
 
                                 feature_name2 = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'V'
                                 if inverse:
-                                    feature[feature_name2] = value.cpu()
+                                    feature[feature_name2] = value#.cpu()
                                 else:
                                     value =feature[feature_name2].cuda()
                         else:
@@ -119,13 +121,13 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                                 30,32,33,34, 35,36, 37] and type=='single':
                                 feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'Q'
                                 if inverse:
-                                    feature[feature_name] = query[:, :, 512:, :].cpu()
+                                    feature[feature_name] = query[:, :, 512:, :]#.cpu()
                                 else:
                                     query[:, :, 512:, :] = feature[feature_name].cuda()
 
                                 feature_name2 = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'V'
                                 if inverse:
-                                    feature[feature_name2] = value[:, :, 512:, :].cpu()
+                                    feature[feature_name2] = value[:, :, 512:, :]#.cpu()
                                 else:
                                     value[:, :, 512:, :] = feature[feature_name2].cuda()
 
@@ -134,7 +136,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                         if inject and id > 19 and type=='single':
                             feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'V'
                             if inverse:
-                                feature[feature_name] = value.cpu()
+                                feature[feature_name] = value#.cpu()
                             else:
                                 value =feature[feature_name].cuda()
         
@@ -186,7 +188,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                             is_inject = True
                             feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'Q'
                             if inverse:
-                                x=query.cpu()
+                                x=query#.cpu()
                                 x  = x [:, :, 512:, :]
                                 feature[feature_name] = x
                             else:
@@ -194,7 +196,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
 
                             feature_name2 = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'K'
                             if inverse:
-                                x=key.cpu()
+                                x=key#.cpu()
                                 x  = x [:, :, 512:, :]
                                 feature[feature_name2] = x
                             else:
@@ -205,7 +207,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                             is_inject = True
                             feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'Q'
                             if inverse:
-                                x=query.cpu()
+                                x=query#.cpu()
                                 x  = x [:, :, 512:, :]
                                 feature[feature_name] = x
                             else:
@@ -213,22 +215,23 @@ class RfSolverFluxAttnProcessor2_0_3opt:
 
                             feature_name2 = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'K'
                             if inverse:
-                                x=key.cpu()
+                                x=key#.cpu()
                                 x  = x [:, :, 512:, :]
                                 feature[feature_name2] = x
                             else:
                                 key[:, :, 1024:, :] = feature[feature_name2].cuda()
 
 ###########################3.20测试代码#############
-                        if t==1.0:
+                        if t>=0.97:
                             
                             if inject and ( id in [
                                 6, 9, 
+                                # 31,19,20,21,
                                 30,32,33,34, 35,36, 37] )and type=='single':
                                 # is_inject = True
                                 feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'V'
                                 if inverse:
-                                    x=value.cpu()
+                                    x=value#.cpu()
                                     x  = x [:, :, 512:, :]
                                     feature[feature_name] = x
                                 else:
@@ -275,7 +278,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                     max_val = token_attn_3d.max().item()
 
                     # 一次性转移到CPU
-                    token_attn_2d_list = token_attn_3d.cpu().unbind(0)
+                    token_attn_2d_list = token_attn_3d#.cpu().unbind(0)
 
                     os.makedirs(attn_map_out_path, exist_ok=True)
 
@@ -349,9 +352,9 @@ class RfSolverFluxAttnProcessor2_0_3opt:
 
 
 ################################################3.20测试代码####################################
-            def SVD_attention_enhanced(query, key, value, alpha=2.0, v=1.5, K=3):
+            def SVD_attention_enhanced(query, key, value, alpha=2.0, v=1.5, K=3, svd_rank=None):
                 """
-                基于SVD的注意力增强机制（并行优化版）
+                基于低秩SVD的注意力增强机制（并行优化版）
                 
                 参数说明:
                     query (Tensor): 查询向量，形状为 [B, H, L, D]
@@ -360,10 +363,11 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                     alpha (float): 注意力权重放大系数，默认2.0
                     v (float): Sigmoid斜率系数，默认1.5
                     K (int): 需要增强的基数量，默认3
+                    svd_rank (int): SVD低秩分解的秩，None时自动确定
                     
                 返回:
                     Tensor: 增强后的注意力输出，形状与query相同
-                
+                    
                 注:
                     B: batch_size, H: num_heads, L: seq_len, D: head_dim
                     text_token_1_end=512, text_token_2_end=1024 为预定义常量
@@ -387,24 +391,45 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                     # 提取image->text1的注意力矩阵 [B, H, 1024:, :512]
                     image_to_text1_attn = attn[:, :, image_token_start:, :text_token_1_end]
 
-                    # ==================== 并行SVD处理 ====================
+                    # ==================== 动态确定SVD秩 ====================
+                    img_seq_len = L - image_token_start
+                    text2_seq_len = text_token_2_end - text_token_1_end
+                    
+                    # 自适应确定低秩SVD的秩，保证精度
+                    if svd_rank is None:
+                        # 选择较小维度的75%作为低秩近似，确保精度
+                        max_rank = min(img_seq_len, text2_seq_len)
+                        svd_rank = max(K, min(max_rank, max(int(0.75 * max_rank), 16)))
+
+                    # ==================== 并行低秩SVD处理 ====================
                     for b in range(B):  # 保持batch维度循环（通常batch_size较小）
                         # 当前batch的所有head并行处理
-                        # image_to_text2_attn: [H, img_seq, text2_seq] (img_seq = L - 1024)
                         A_text2 = image_to_text2_attn[b]  # [H, img_seq, text2_seq]
                         
-                        # 转换数据类型为float32
+                        # 转换数据类型为float32提高SVD精度
                         A_text2_float = A_text2.to(torch.float32)
 
-                        # 批量SVD分解（并行处理所有head）
-                        # U: [H, img_seq, k], S: [H, k], Vh: [H, k, text2_seq]
-                        _, _, Vh = torch.linalg.svd(A_text2_float, full_matrices=False)
+                        # 使用低秩SVD分解（并行处理所有head）
+                        # 注意：torch.svd_lowrank返回 U, S, V 而不是 U, S, Vh
+                        try:
+                            # 低秩SVD分解，指定秩以提高效率
+                            U, S, V = torch.svd_lowrank(A_text2_float, q=svd_rank, niter=2)
+                            # V已经是转置形式，相当于原来的Vh
+                            Vh = V.transpose(-1, -2)  # [H, rank, text2_seq]
+                            
+                        except RuntimeError:
+                            # 如果低秩SVD失败，回退到标准SVD
+                            print(f"Warning: 低秩SVD失败，回退到标准SVD (batch={b})")
+                            _, _, Vh_full = torch.linalg.svd(A_text2_float, full_matrices=False)
+                            # 截取前svd_rank个奇异向量
+                            Vh = Vh_full[:, :svd_rank, :]  # [H, rank, text2_seq]
                         
                         # 转换回原始数据类型
                         Vh = Vh.to(A_text2.dtype)
 
                         # ==================== 投影与增强 ====================
-                        # 将image->text1的注意力投影到基空间 [H, img_seq, text1_seq] × [H, text2_seq, k] -> [H, img_seq, k]
+                        # 将image->text1的注意力投影到基空间
+                        # [H, img_seq, text1_seq] × [H, text2_seq, rank] -> [H, img_seq, rank]
                         proj_coeff = torch.matmul(image_to_text1_attn[b], Vh.transpose(-1, -2))
                         
                         # 动态计算实际增强维度
@@ -421,13 +446,35 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                             proj_coeff = torch.cat([enhanced_dims, proj_coeff[..., effective_K:]], dim=-1)
                         
                         # ==================== 注意力重构 ====================
-                        # 使用增强后的系数重构注意力矩阵 [H, img_seq, k] × [H, k, text2_seq] -> [H, img_seq, text2_seq]
+                        # 使用增强后的系数重构注意力矩阵
+                        # [H, img_seq, rank] × [H, rank, text2_seq] -> [H, img_seq, text2_seq]
                         reconstructed_attn = torch.matmul(proj_coeff, Vh)
+                        
+                        # ==================== 精度补偿（修复版） ====================
+                        # 为了进一步保持精度，可以添加残差连接
+                        if svd_rank < min(img_seq_len, text2_seq_len):
+                            # 计算低秩近似的残差 - 按head分别计算
+                            original_norm = torch.norm(A_text2, dim=(-2, -1), keepdim=True)  # [H, 1, 1]
+                            reconstructed_norm = torch.norm(reconstructed_attn, dim=(-2, -1), keepdim=True)  # [H, 1, 1]
+                            
+                            # 应用归一化补偿，防止能量损失
+                            # 使用 torch.where 处理条件判断
+                            valid_mask = reconstructed_norm > 1e-8  # [H, 1, 1]
+                            scale_factor = torch.where(
+                                valid_mask,
+                                original_norm / reconstructed_norm,
+                                torch.ones_like(original_norm)
+                            )
+                            # 限制缩放因子范围，防止过度补偿
+                            scale_factor = torch.clamp(scale_factor, 0.8, 1.2)
+                            reconstructed_attn = reconstructed_attn * scale_factor
                         
                         # ==================== 写回原矩阵 ====================
                         # 将重构后的注意力权重写回image->text1的位置
                         attn[b, :, image_token_start:, :text_token_1_end] = reconstructed_attn
-                        attn = attn.transpose(2, 3)
+
+                    # 恢复注意力矩阵的原始维度顺序
+                    # attn = attn.transpose(2, 3)
 
                     # ==================== 最终输出 ====================
                     return torch.matmul(attn, value)
@@ -557,7 +604,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
 ###########################3.20 测试代码#############
             if test and inverse == False and enhanced and inject and is_inject and t<=SVD_start and t>=SVD_end:
 
-                # hidden_states = enhanced_scaled_dot_product_attention(query, key, value, alpha=9, v=3, i_list=enhanced_list,K=5)
+                # hidden_states = enhanced_scaled_dot_product_attention(query, key, value, alpha=alpha, v=v, i_list=enhanced_list,K=K)
 
                 hidden_states = SVD_attention_enhanced(query, key, value, alpha=alpha, v=v,K=K)
 
@@ -1049,6 +1096,41 @@ def save_all_figures(fig_info_list: List[Dict[str, Any]]) -> None:
 
 @torch.inference_mode()
 def main(args):
+
+    # 3. 根据使用的实验方法确定配置名称
+    method_name = "default"
+    if args.stable_flow:
+        method_name = "stable_flow"
+    elif args.test:
+        method_name = "test"
+    elif args.enhanced:
+        method_name = "enhanced"
+    
+    # 4. 确定工作模式
+    if args.eval_datasets:
+        mode = f"dataset_mode_{args.eval_datasets}"
+    elif args.image_path:
+        mode = "single_image_mode"
+    else:
+        mode = "unknown_mode"
+    
+    # 5. 创建运行名称（使用时间戳保证唯一性）
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_name = f"{args.run_name}_{method_name}_{mode}_{timestamp}"
+    
+    # 6. 初始化wandb并记录所有参数
+    wandb.init(
+        project=args.experiment_name,
+        name=run_name,
+        config=vars(args)  # 将整个参数字典记录为配置
+    )
+    
+    # 7. 打印和记录初始配置
+    print("\n===== 实验配置 =====")
+    for key, value in vars(args).items():
+        print(f"{key}: {value}")
+    print("====================")
+
     start_time = time.time()  # 记录开始时间
 
     if args.dtype == 'bfloat16':
@@ -1348,6 +1430,17 @@ def main(args):
         until_dino_score = mean_dino_score / count
         print(f"==> dino score: {until_dino_score:.4f}")
         print('#######################################')
+        # 记录指标到wandb
+        wandb.log({
+            "clip-T": until_clip_score,
+            "clip-I": until_clip_v_score,
+            "mse": until_mse_score,
+            "psnr": until_psnr_score,
+            "lpips": until_lpips_score,
+            "ssim": until_ssim_score,
+            "dino": until_dino_score,
+            "count": count
+        })
 
         # 保存输出图像
         output_filename = f"num_steps{args.num_steps}_inject{args.inject}_inversed{args.use_inversed_latents}_guidance{args.guidance_scale}.png"
@@ -1462,6 +1555,11 @@ if __name__ == "__main__":
     parser.add_argument('--SVD_start', type=float, default=0.96, help='SVD 增强 开始时间(denoise t 从1.0到0.0)')
     parser.add_argument('--SVD_end', type=float, default=0.85, help='SVD 增强 结束时间(denoise t 从1.0到0.0)')
 
+    # 添加实验名称参数
+    parser.add_argument('--experiment_name', type=str, default='image_editing',
+                        help='实验名称（用于wandb记录）')
+    parser.add_argument('--run_name', type=str, default='default_run',
+                        help='运行名称（用于wandb记录）')
 
     args = parser.parse_args()
     main(args)

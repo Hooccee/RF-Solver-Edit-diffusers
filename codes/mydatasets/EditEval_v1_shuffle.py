@@ -8,12 +8,12 @@ default_rootpath = '/data/chx/EditEval_v1/Dataset'
 default_csvpath = '/data/chx/EditEval_v1/Dataset/editing_prompts_collection.xlsx'
 default_ilistpath = '/home/chx/mySrc/diffusers-dev-Bob/codes/ilist_data_EditEval_v1.json'  # 根据实际情况设置默认路径
 
-class EditEval_v1_datase_shauffle(Dataset):
+class EditEval_v1_datase_shuffle(Dataset):
     def __init__(self, transform=None,
                  csvpath=default_csvpath,
                  rootpath=default_rootpath,
                  ilistpath=default_ilistpath):
-        super(EditEval_v1_datase_shauffle, self).__init__()
+        super(EditEval_v1_datase_shuffle, self).__init__()
         self.transform = transform
         self.csvpath = csvpath
         self.rootpath = rootpath

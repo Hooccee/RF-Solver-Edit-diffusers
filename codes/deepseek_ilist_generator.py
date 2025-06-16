@@ -22,10 +22,10 @@ import logging
 
 from diffusers import BitsAndBytesConfig as DiffusersBitsAndBytesConfig
 from transformers import BitsAndBytesConfig as TransformersBitsAndBytesConfig
-from datasets import get_dataloader
+from mydatasets import get_dataloader
 
 from utils.utils import *
-from utils.metrics import *
+# from utils.metrics import *
 
 
 logger = logging.getLogger(__name__)   # pylint: disable=invalid-name
@@ -162,7 +162,7 @@ def pure_llm_ilist(source_tokens, target_tokens, api_key):
 
 
 # 第一步：生成所有token数据并保存
-def generate_and_save_tokens(dataloader, pipe, token_filename="token_data.json"):
+def generate_and_save_tokens(dataloader, pipe, token_filename="token_data_emu_edit_test_set.json"):
     all_sources = []
     all_targets = []
 
@@ -205,9 +205,9 @@ def generate_and_save_tokens(dataloader, pipe, token_filename="token_data.json")
         }, f, indent=2)
 
 # 修改后的第二步：多线程生成增强索引
-def generate_and_save_ilist(token_filename="token_data.json", 
-                           result_filename="ilist_data.json",
-                           api_key="your_api_key",
+def generate_and_save_ilist(token_filename="token_data_emu_edit_test_set.json", 
+                           result_filename="ilist_data_emu_edit_test_set.json",
+                           api_key="sk-946567fa3ee944618ea89f288b0a7fc3",
                            max_workers=20):
     # 读取token数据
     with open(token_filename, 'r') as f:
@@ -285,9 +285,9 @@ def main(args):
 
     # ******** Loading pipeline **********
     pipe = RfSolverFluxPipeline.from_pretrained(args.model_path, torch_dtype=DTYPE)
-    #pipe.to(device)
+    pipe.to(device)
     # print(pipe.hf_device_map)
-    pipe.enable_model_cpu_offload()
+    # pipe.enable_model_cpu_offload()
     # pipe.enable_sequential_cpu_offload()
 
     # ******** Input processing **********
@@ -295,8 +295,8 @@ def main(args):
         img = Image.open(args.image_path)
         train_transforms = transforms.Compose(
                     [
-                        transforms.Resize(1024, interpolation=transforms.InterpolationMode.BILINEAR),
-                        transforms.CenterCrop(1024),
+                        transforms.Resize(512, interpolation=transforms.InterpolationMode.BILINEAR),
+                        transforms.CenterCrop(512),
                         transforms.ToTensor(),
                         transforms.Normalize([0.5], [0.5]),
                     ]
@@ -338,7 +338,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='使用不同参数测试 interpolated_denoise。')
     parser.add_argument('--model_path', type=str, default='/root/autodl-tmp/Flux-dev', help='预训练模型的路径')
     parser.add_argument('--image_path', type=str, default='./example/image.png', help='输入图像的路径')
-    parser.add_argument('--eval-datasets', type=str, default='', help='选择要编辑的数据集：EditEval_v1, PIE-Bench')
+    parser.add_argument('--eval-datasets', type=str, default='', help='选择要编辑的数据集：EditEval_v1, PIE-Bench, emu_edit_test_set')
     parser.add_argument('--dtype', type=str, default='bfloat16', choices=['float16', 'bfloat16', 'float32'], help='计算的数据类型')   
     args = parser.parse_args()
     main(args)

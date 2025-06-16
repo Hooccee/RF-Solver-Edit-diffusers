@@ -1,5 +1,7 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = '7'
+import wandb
+import datetime
 import time  
 import gc
 import psutil
@@ -104,13 +106,13 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                                 17, 18] and type=='double':
                                 feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'Q'
                                 if inverse:
-                                    feature[feature_name] = query.cpu()
+                                    feature[feature_name] = query#.cpu()
                                 else:
                                     query =feature[feature_name].cuda()
 
                                 feature_name2 = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'V'
                                 if inverse:
-                                    feature[feature_name2] = value.cpu()
+                                    feature[feature_name2] = value#.cpu()
                                 else:
                                     value =feature[feature_name2].cuda()
                         else:
@@ -119,13 +121,13 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                                 30,32,33,34, 35,36, 37] and type=='single':
                                 feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'Q'
                                 if inverse:
-                                    feature[feature_name] = query[:, :, 512:, :].cpu()
+                                    feature[feature_name] = query[:, :, 512:, :]#.cpu()
                                 else:
                                     query[:, :, 512:, :] = feature[feature_name].cuda()
 
                                 feature_name2 = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'V'
                                 if inverse:
-                                    feature[feature_name2] = value[:, :, 512:, :].cpu()
+                                    feature[feature_name2] = value[:, :, 512:, :]#.cpu()
                                 else:
                                     value[:, :, 512:, :] = feature[feature_name2].cuda()
 
@@ -134,7 +136,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                         if inject and id > 19 and type=='single':
                             feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'V'
                             if inverse:
-                                feature[feature_name] = value.cpu()
+                                feature[feature_name] = value#.cpu()
                             else:
                                 value =feature[feature_name].cuda()
         
@@ -186,7 +188,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                             is_inject = True
                             feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'Q'
                             if inverse:
-                                x=query.cpu()
+                                x=query#.cpu()
                                 x  = x [:, :, 512:, :]
                                 feature[feature_name] = x
                             else:
@@ -194,7 +196,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
 
                             feature_name2 = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'K'
                             if inverse:
-                                x=key.cpu()
+                                x=key#.cpu()
                                 x  = x [:, :, 512:, :]
                                 feature[feature_name2] = x
                             else:
@@ -205,7 +207,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                             is_inject = True
                             feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'Q'
                             if inverse:
-                                x=query.cpu()
+                                x=query#.cpu()
                                 x  = x [:, :, 512:, :]
                                 feature[feature_name] = x
                             else:
@@ -213,7 +215,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
 
                             feature_name2 = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'K'
                             if inverse:
-                                x=key.cpu()
+                                x=key#.cpu()
                                 x  = x [:, :, 512:, :]
                                 feature[feature_name2] = x
                             else:
@@ -228,7 +230,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                                 # is_inject = True
                                 feature_name = str(t) + '_' + str(second_order) + '_' + str(id) + '_' + type + '_' + 'V'
                                 if inverse:
-                                    x=value.cpu()
+                                    x=value#.cpu()
                                     x  = x [:, :, 512:, :]
                                     feature[feature_name] = x
                                 else:
@@ -275,7 +277,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
                     max_val = token_attn_3d.max().item()
 
                     # 一次性转移到CPU
-                    token_attn_2d_list = token_attn_3d.cpu().unbind(0)
+                    token_attn_2d_list = token_attn_3d#.cpu().unbind(0)
 
                     os.makedirs(attn_map_out_path, exist_ok=True)
 
@@ -557,7 +559,7 @@ class RfSolverFluxAttnProcessor2_0_3opt:
 ###########################3.20 测试代码#############
             if test and inverse == False and enhanced and inject and is_inject and t<=SVD_start and t>=SVD_end:
 
-                # hidden_states = enhanced_scaled_dot_product_attention(query, key, value, alpha=9, v=3, i_list=enhanced_list,K=5)
+                # hidden_states = enhanced_scaled_dot_product_attention(query, key, value, alpha=alpha, v=v, i_list=enhanced_list,K=K)
 
                 hidden_states = SVD_attention_enhanced(query, key, value, alpha=alpha, v=v,K=K)
 
@@ -1049,6 +1051,41 @@ def save_all_figures(fig_info_list: List[Dict[str, Any]]) -> None:
 
 @torch.inference_mode()
 def main(args):
+
+    # 3. 根据使用的实验方法确定配置名称
+    method_name = "default"
+    if args.stable_flow:
+        method_name = "stable_flow"
+    elif args.test:
+        method_name = "test"
+    elif args.enhanced:
+        method_name = "enhanced"
+    
+    # 4. 确定工作模式
+    if args.eval_datasets:
+        mode = f"dataset_mode_{args.eval_datasets}"
+    elif args.image_path:
+        mode = "single_image_mode"
+    else:
+        mode = "unknown_mode"
+    
+    # 5. 创建运行名称（使用时间戳保证唯一性）
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_name = f"{args.run_name}_{method_name}_{mode}_{timestamp}"
+    
+    # 6. 初始化wandb并记录所有参数
+    wandb.init(
+        project=args.experiment_name,
+        name=run_name,
+        config=vars(args)  # 将整个参数字典记录为配置
+    )
+    
+    # 7. 打印和记录初始配置
+    print("\n===== 实验配置 =====")
+    for key, value in vars(args).items():
+        print(f"{key}: {value}")
+    print("====================")
+
     start_time = time.time()  # 记录开始时间
 
     if args.dtype == 'bfloat16':
@@ -1348,6 +1385,17 @@ def main(args):
         until_dino_score = mean_dino_score / count
         print(f"==> dino score: {until_dino_score:.4f}")
         print('#######################################')
+        # 记录指标到wandb
+        wandb.log({
+            "clip-T": until_clip_score,
+            "clip-I": until_clip_v_score,
+            "mse": until_mse_score,
+            "psnr": until_psnr_score,
+            "lpips": until_lpips_score,
+            "ssim": until_ssim_score,
+            "dino": until_dino_score,
+            "count": count
+        })
 
         # 保存输出图像
         output_filename = f"num_steps{args.num_steps}_inject{args.inject}_inversed{args.use_inversed_latents}_guidance{args.guidance_scale}.png"
@@ -1462,6 +1510,11 @@ if __name__ == "__main__":
     parser.add_argument('--SVD_start', type=float, default=0.96, help='SVD 增强 开始时间(denoise t 从1.0到0.0)')
     parser.add_argument('--SVD_end', type=float, default=0.85, help='SVD 增强 结束时间(denoise t 从1.0到0.0)')
 
+    # 添加实验名称参数
+    parser.add_argument('--experiment_name', type=str, default='image_editing',
+                        help='实验名称（用于wandb记录）')
+    parser.add_argument('--run_name', type=str, default='default_run',
+                        help='运行名称（用于wandb记录）')
 
     args = parser.parse_args()
     main(args)

@@ -7,12 +7,12 @@ default_rootpath = "/data/lyw/PIE-Benchmark/annotation_images"
 default_jsonpath = "/data/lyw/PIE-Benchmark/mapping_file.json"
 default_ilistpath = "/home/chx/mySrc/diffusers-dev-Bob/codes/ilist_data_PIE-Bench.json"
 
-class PIE_Bench_dataset_shauffle(Dataset):
+class PIE_Bench_dataset_shuffle(Dataset):
     def __init__(self, transform=None,
                  jsonpath=default_jsonpath,
                  rootpath=default_rootpath,
                  ilistpath=default_ilistpath):
-        super(PIE_Bench_dataset_shauffle, self).__init__()
+        super(PIE_Bench_dataset_shuffle, self).__init__()
         self.transform = transform
         self.jsonpath = jsonpath
         self.rootpath = rootpath

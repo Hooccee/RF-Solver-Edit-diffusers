@@ -1,0 +1,11 @@
+python3 rf_inversion.py \
+	--model_path /mmu-vcg-hdd/caohaoxiang/FLUX.1-dev \
+	--eval_dataset emu_edit_test_set \
+	--height 512 \
+	--width 512 \
+	--dtype bfloat16 \
+	--quant_8bit \
+	--num_inversion_steps 28 \
+	--num_inference_steps 28 \
+	--output_dir outputs/rf_inversion_emu_edit_test_set \
+	--save_samples

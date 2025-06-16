@@ -188,5 +188,6 @@ codes/main_8bit_3op_enhance_single1_39_causalD_cash.py
 codes/main_8bit_3op_enhance_single1_39_causalR_cash2.py
 
 codes/main_8bit_3op_enhance_single1_39_causalD_cash.py
-*.sh
+# *.sh
 **cash**
+*.out

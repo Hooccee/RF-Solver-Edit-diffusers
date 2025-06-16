@@ -1,6 +1,6 @@
 import os
 from re import I
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+os.environ["CUDA_VISIBLE_DEVICES"] = '7'
 import gc
 from typing import Any, Dict, List, Optional, Tuple, Union
 import torch
@@ -24,7 +24,7 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 import logging
 from transformers import BitsAndBytesConfig as TransformersBitsAndBytesConfig
-from datasets import get_dataloader
+from mydatasets import get_dataloader
 
 from utils.utils import *
 from utils.metrics import *
@@ -68,7 +68,9 @@ def process_single_image(
     inverted_latents, image_latents, latent_image_ids = pipe.invert(
         image=image,
         num_inversion_steps=args.num_inversion_steps,
-        gamma=args.gamma
+        gamma=args.gamma,
+        width=args.width,
+        height=args.height,
     )
     
     # 编辑生成
@@ -81,7 +83,9 @@ def process_single_image(
         stop_timestep=args.stop_timestep,
         num_inference_steps=args.num_inference_steps,
         eta=args.eta,
-        guidance_scale=args.guidance_scale
+        guidance_scale=args.guidance_scale,
+        width=args.width,
+        height=args.height,
     ).images
     
     # 后处理
@@ -117,9 +121,9 @@ def main(args):
     # 加载模型
 
     pipe = DiffusionPipeline.from_pretrained(
-        "/data/chx/FLUX.1-dev",
+        "/mmu-vcg-hdd/caohaoxiang/FLUX.1-dev",
         torch_dtype=torch.bfloat16,
-        custom_pipeline="/home/chx/mySrc/diffusers-dev-Bob/examples/community/pipeline_flux_rf_inversion")
+        custom_pipeline="/mmu-vcg-hdd/caohaoxiang/mySrc/CausalCtrl/examples/community/pipeline_flux_rf_inversion")
     pipe.to("cuda")
 
     
@@ -314,7 +318,7 @@ if __name__ == "__main__":
     parser.add_argument("--eval_dataset", type=str,default='', help='选择要编辑的数据集: EditEval_v1, PIE-Bench')
     parser.add_argument("--height", type=int, default=1024)
     parser.add_argument("--width", type=int, default=1024)
-    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--num_workers", type=int, default=8)
     
     # 流程参数
