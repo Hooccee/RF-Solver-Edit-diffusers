@@ -176,3 +176,9 @@ tags
 
 # wandb
 wandb
+**.out
+**.bin
+**.pkl
+**.safetensors
+**.npy
+**.ipynb

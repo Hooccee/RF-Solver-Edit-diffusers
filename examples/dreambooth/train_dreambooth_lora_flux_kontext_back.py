@@ -12,13 +12,13 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
-import os
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import argparse
 import copy
 import itertools
 import logging
 import math
+import os
 import random
 import shutil
 import warnings
@@ -43,8 +43,6 @@ from torchvision import transforms
 from torchvision.transforms import functional as TF
 from tqdm.auto import tqdm
 from transformers import CLIPTokenizer, PretrainedConfig, T5TokenizerFast
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
 
 import diffusers
 from diffusers import (
@@ -68,7 +66,8 @@ from diffusers.utils import check_min_version, convert_unet_state_dict_to_peft, 
 from diffusers.utils.hub_utils import load_or_create_model_card, populate_model_card
 from diffusers.utils.import_utils import is_torch_npu_available
 from diffusers.utils.torch_utils import is_compiled_module
-
+from PIL import Image
+import io
 
 def dict_to_image(img_dict):
     if isinstance(img_dict, dict) and "bytes" in img_dict:
@@ -407,7 +406,7 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--num_class_images",
         type=int,
-        default=100,
+        default=200,
         help=(
             "Minimal class images for prior preservation loss. If there are not enough images already present in"
             " class_data_dir, additional images will be sampled with class_prompt."
@@ -555,7 +554,7 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--dataloader_num_workers",
         type=int,
-        default=24,
+        default=32,
         help=(
             "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
         ),
@@ -753,302 +752,12 @@ def parse_args(input_args=None):
     return args
 
 
-# class DreamBoothDataset(Dataset):
-#     """
-#     A dataset to prepare the instance and class images with the prompts for fine-tuning the model.
-#     It pre-processes the images.
-#     """
-
-#     def __init__(
-#         self,
-#         instance_data_root,
-#         instance_prompt,
-#         class_prompt,
-#         class_data_root=None,
-#         class_num=None,
-#         repeats=1,
-#         center_crop=False,
-#         buckets=None,
-#         args=None,
-#     ):
-#         self.center_crop = center_crop
-
-#         self.instance_prompt = instance_prompt
-#         self.custom_instance_prompts = None
-#         self.class_prompt = class_prompt
-
-#         self.buckets = buckets
-
-#         # if --dataset_name is provided or a metadata jsonl file is provided in the local --instance_data directory,
-#         # we load the training data using load_dataset
-#         if args.dataset_name is not None:
-#             try:
-#                 from datasets import load_dataset,load_from_disk
-#             except ImportError:
-#                 raise ImportError(
-#                     "You are trying to load your data using the datasets library. If you wish to train using custom "
-#                     "captions please install the datasets library: `pip install datasets`. If you wish to load a "
-#                     "local folder containing images only, specify --instance_data_dir instead."
-#                 )
-#             # Downloading and loading a dataset from the hub.
-#             # See more about loading custom images at
-#             # https://huggingface.co/docs/datasets/v2.0.0/en/dataset_script
-#             # dataset = load_dataset(
-#             #     args.dataset_name,
-#             #     args.dataset_config_name,
-#             #     cache_dir=args.cache_dir,
-#             # )
-
-#             dataset = load_dataset(
-#                 "imagefolder",
-#                 data_dir="/mmu-vcg-hdd/caohaoxiang/dataset/Single_Image_Reflection_Removal/openrr1k_rr4k_imagefolder",
-#                 # split="train",
-#             )
-#             # dataset = load_from_disk(args.dataset_name)
-#             # Preprocessing the datasets.
-#             column_names = dataset["train"].column_names
-#             print(f"Dataset columns: {', '.join(column_names)}")
-#             print(f"Dataset name: {args.dataset_name}")
-#             # 6. Get the column names for input/target.
-#             if args.cond_image_column is not None and args.cond_image_column not in column_names:
-#                 raise ValueError(
-#                     f"`--cond_image_column` value '{args.cond_image_column}' not found in dataset columns. Dataset columns are: {', '.join(column_names)}"
-#                 )
-#             if args.image_column is None:
-#                 image_column = column_names[0]
-#                 logger.info(f"image column defaulting to {image_column}")
-#             else:
-#                 image_column = args.image_column
-#                 if image_column not in column_names:
-#                     raise ValueError(
-#                         f"`--image_column` value '{args.image_column}' not found in dataset columns. Dataset columns are: {', '.join(column_names)}"
-#                     )
-#             def load_image(idx, column):
-#                 return dataset["train"][idx][column]
-
-#             # 并行加载 instance_images，实时显示进度
-#             num_samples = len(dataset["train"])
-#             instance_images = [None] * num_samples
-#             with ThreadPoolExecutor(max_workers=48) as executor:
-#                 futures = {executor.submit(load_image, i, image_column): i for i in range(num_samples)}
-#                 for fut in tqdm(as_completed(futures), total=num_samples, desc="加载instance_images"):
-#                     i = futures[fut]
-#                     instance_images[i] = fut.result()
-
-#             # 并行加载 cond_images（如有），实时显示进度
-#             cond_images = None
-#             cond_image_column = args.cond_image_column
-#             if cond_image_column is not None:
-#                 cond_images = [None] * num_samples
-#                 with ThreadPoolExecutor(max_workers=48) as executor:
-#                     futures = {executor.submit(load_image, i, cond_image_column): i for i in range(num_samples)}
-#                     for fut in tqdm(as_completed(futures), total=num_samples, desc="加载cond_images"):
-#                         i = futures[fut]
-#                         cond_images[i] = fut.result()
-#                 assert len(instance_images) == len(cond_images)
-
-#             if args.caption_column is None:
-#                 logger.info(
-#                     "No caption column provided, defaulting to instance_prompt for all images. If your dataset "
-#                     "contains captions/prompts for the images, make sure to specify the "
-#                     "column as --caption_column"
-#                 )
-#                 self.custom_instance_prompts = None
-#             else:
-#                 if args.caption_column not in column_names:
-#                     raise ValueError(
-#                         f"`--caption_column` value '{args.caption_column}' not found in dataset columns. Dataset columns are: {', '.join(column_names)}"
-#                     )
-#                 custom_instance_prompts = dataset["train"][args.caption_column]
-#                 # create final list of captions according to --repeats
-#                 self.custom_instance_prompts = []
-#                 for caption in custom_instance_prompts:
-#                     self.custom_instance_prompts.extend(itertools.repeat(caption, repeats))
-#         else:
-#             self.instance_data_root = Path(instance_data_root)
-#             if not self.instance_data_root.exists():
-#                 raise ValueError("Instance images root doesn't exists.")
-
-#             instance_images = [Image.open(path) for path in list(Path(instance_data_root).iterdir())]
-#             self.custom_instance_prompts = None
-
-#         self.instance_images = []
-#         self.cond_images = []
-#         for i, img in enumerate(instance_images):
-#             self.instance_images.extend(itertools.repeat(img, repeats))
-#             if args.dataset_name is not None and cond_images is not None:
-#                 self.cond_images.extend(itertools.repeat(cond_images[i], repeats))
-
-#         self.pixel_values = []
-#         self.cond_pixel_values = []
-#         for i, image in enumerate(self.instance_images):
-#             image = dict_to_image(image)
-#             image = exif_transpose(image)
-#             if not image.mode == "RGB":
-#                 image = image.convert("RGB")
-#             dest_image = None
-#             if self.cond_images:
-#                 dest_image = dict_to_image(self.cond_images[i])
-#                 # dest_image = exif_transpose(self.cond_images[i])
-#                 dest_image = exif_transpose(dest_image)
-#                 if not dest_image.mode == "RGB":
-#                     dest_image = dest_image.convert("RGB")
-
-#             width, height = image.size
-
-#             # Find the closest bucket
-#             bucket_idx = find_nearest_bucket(height, width, self.buckets)
-#             target_height, target_width = self.buckets[bucket_idx]
-#             self.size = (target_height, target_width)
-
-#             # based on the bucket assignment, define the transformations
-#             image, dest_image = self.paired_transform(
-#                 image,
-#                 dest_image=dest_image,
-#                 size=self.size,
-#                 center_crop=args.center_crop,
-#                 random_flip=args.random_flip,
-#             )
-#             self.pixel_values.append((image, bucket_idx))
-#             if dest_image is not None:
-#                 self.cond_pixel_values.append((dest_image, bucket_idx))
-
-#         self.num_instance_images = len(self.instance_images)
-#         self._length = self.num_instance_images
-
-#         if class_data_root is not None:
-#             self.class_data_root = Path(class_data_root)
-#             self.class_data_root.mkdir(parents=True, exist_ok=True)
-#             self.class_images_path = list(self.class_data_root.iterdir())
-#             if class_num is not None:
-#                 self.num_class_images = min(len(self.class_images_path), class_num)
-#             else:
-#                 self.num_class_images = len(self.class_images_path)
-#             self._length = max(self.num_class_images, self.num_instance_images)
-#         else:
-#             self.class_data_root = None
-
-#         self.image_transforms = transforms.Compose(
-#             [
-#                 transforms.Resize(self.size, interpolation=transforms.InterpolationMode.BILINEAR),
-#                 transforms.CenterCrop(self.size) if center_crop else transforms.RandomCrop(self.size),
-#                 transforms.ToTensor(),
-#                 transforms.Normalize([0.5], [0.5]),
-#             ]
-#         )
-
-#     def __len__(self):
-#         return self._length
-
-#     def __getitem__(self, index):
-#         example = {}
-#         instance_image, bucket_idx = self.pixel_values[index % self.num_instance_images]
-#         example["instance_images"] = instance_image
-#         example["bucket_idx"] = bucket_idx
-#         if self.cond_pixel_values:
-#             dest_image, _ = self.cond_pixel_values[index % self.num_instance_images]
-#             example["cond_images"] = dest_image
-
-#         if self.custom_instance_prompts:
-#             caption = self.custom_instance_prompts[index % self.num_instance_images]
-#             if caption:
-#                 example["instance_prompt"] = caption
-#             else:
-#                 example["instance_prompt"] = self.instance_prompt
-
-#         else:  # custom prompts were provided, but length does not match size of image dataset
-#             example["instance_prompt"] = self.instance_prompt
-
-#         if self.class_data_root:
-#             class_image = Image.open(self.class_images_path[index % self.num_class_images])
-#             class_image = exif_transpose(class_image)
-
-#             if not class_image.mode == "RGB":
-#                 class_image = class_image.convert("RGB")
-#             example["class_images"] = self.image_transforms(class_image)
-#             example["class_prompt"] = self.class_prompt
-
-#         return example
-
-#     def paired_transform(self, image, dest_image=None, size=(224, 224), center_crop=False, random_flip=False):
-#         # 1. Resize (deterministic)
-#         resize = transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR)
-#         image = resize(image)
-#         if dest_image is not None:
-#             dest_image = resize(dest_image)
-
-#         # 2. Crop: either center or SAME random crop
-#         if center_crop:
-#             crop = transforms.CenterCrop(size)
-#             image = crop(image)
-#             if dest_image is not None:
-#                 dest_image = crop(dest_image)
-#         else:
-#             # get_params returns (i, j, h, w)
-#             i, j, h, w = transforms.RandomCrop.get_params(image, output_size=size)
-#             image = TF.crop(image, i, j, h, w)
-#             if dest_image is not None:
-#                 dest_image = TF.crop(dest_image, i, j, h, w)
-
-#         # 3. Random horizontal flip with the SAME coin flip
-#         if random_flip:
-#             do_flip = random.random() < 0.5
-#             if do_flip:
-#                 image = TF.hflip(image)
-#                 if dest_image is not None:
-#                     dest_image = TF.hflip(dest_image)
-
-#         # 4. ToTensor + Normalize (deterministic)
-#         to_tensor = transforms.ToTensor()
-#         normalize = transforms.Normalize([0.5], [0.5])
-#         image = normalize(to_tensor(image))
-#         if dest_image is not None:
-#             dest_image = normalize(to_tensor(dest_image))
-
-#         return (image, dest_image) if dest_image is not None else (image, None)
-
-
-# def collate_fn(examples, with_prior_preservation=False):
-#     pixel_values = [example["instance_images"] for example in examples]
-#     prompts = [example["instance_prompt"] for example in examples]
-
-#     # Concat class and instance examples for prior preservation.
-#     # We do this to avoid doing two forward passes.
-#     if with_prior_preservation:
-#         pixel_values += [example["class_images"] for example in examples]
-#         prompts += [example["class_prompt"] for example in examples]
-
-#     pixel_values = torch.stack(pixel_values)
-#     pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
-
-#     batch = {"pixel_values": pixel_values, "prompts": prompts}
-#     if any("cond_images" in example for example in examples):
-#         cond_pixel_values = [example["cond_images"] for example in examples]
-#         cond_pixel_values = torch.stack(cond_pixel_values)
-#         cond_pixel_values = cond_pixel_values.to(memory_format=torch.contiguous_format).float()
-#         batch.update({"cond_pixel_values": cond_pixel_values})
-#     return batch
-
-
-# Set up logging
-logger = logging.getLogger(__name__)
-
-def find_nearest_bucket(height, width, buckets):
-    aspect = height / width
-    # Find bucket with closest aspect ratio
-    closest_bucket = min(buckets, key=lambda bucket: abs(bucket[0]/bucket[1] - aspect))
-    
-    # If multiple buckets have same aspect difference, choose smallest area that fits
-    area = height * width
-    fitting_buckets = [b for b in buckets if b[0] >= height and b[1] >= width]
-    if fitting_buckets:
-        return min(fitting_buckets, key=lambda b: b[0]*b[1])
-    
-    # Otherwise use closest aspect
-    return closest_bucket
-
-
 class DreamBoothDataset(Dataset):
+    """
+    A dataset to prepare the instance and class images with the prompts for fine-tuning the model.
+    It pre-processes the images.
+    """
+
     def __init__(
         self,
         instance_data_root,
@@ -1062,363 +771,233 @@ class DreamBoothDataset(Dataset):
         args=None,
     ):
         self.center_crop = center_crop
-        self.random_flip = args.random_flip
+
         self.instance_prompt = instance_prompt
         self.custom_instance_prompts = None
         self.class_prompt = class_prompt
+
         self.buckets = buckets
-        self.args = args
-        
-        # Create cache directory if using caching
-        cache_dir = getattr(args, "cache_dir", None)
-        if not cache_dir:
-            cache_dir = "./dataset_cache"
-        self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.size_cache_path = self.cache_dir / "image_sizes.npy"
 
-        # Process dataset based on source
+        # if --dataset_name is provided or a metadata jsonl file is provided in the local --instance_data directory,
+        # we load the training data using load_dataset
         if args.dataset_name is not None:
-            self._init_hf_dataset(repeats)
-        else:
-            self._init_local_dataset(instance_data_root, repeats)
-
-        # Precompute bucket indices in parallel
-        self._precompute_bucket_indices()
-
-        # Initialize class images
-        self._init_class_images(class_data_root, class_num)
-
-    def _init_hf_dataset(self, repeats):
-        try:
-            from datasets import load_dataset
-        except ImportError:
-            raise ImportError("datasets library required for HF datasets")
-
-        dataset = load_dataset(
-            "imagefolder",
-            data_dir="/mmu-vcg-hdd/caohaoxiang/dataset/Single_Image_Reflection_Removal/openrr1k_rr4k_imagefolder",
-        )
-        self.dataset = dataset["train"]
-        self.num_samples = len(self.dataset)
-        
-        column_names = self.dataset.column_names
-        self.image_column = self.args.image_column or column_names[0]
-        self.cond_image_column = self.args.cond_image_column
-        
-        # Handle custom prompts
-        if self.args.caption_column:
-            captions = self.dataset[self.args.caption_column]
-            self.custom_instance_prompts = list(itertools.chain.from_iterable(
-                itertools.repeat(caption, repeats) for caption in captions
-            ))
-            
-        # Create repeated indices
-        self.instance_indices = list(itertools.chain.from_iterable(
-            itertools.repeat(i, repeats) for i in range(self.num_samples)
-        ))
-
-    def _init_local_dataset(self, instance_data_root, repeats):
-        self.instance_data_root = Path(instance_data_root)
-        if not self.instance_data_root.exists():
-            raise ValueError("Instance images root doesn't exist.")
-            
-        # List all image paths
-        image_paths = [p for p in self.instance_data_root.iterdir() if p.is_file()]
-        self.image_paths = list(itertools.chain.from_iterable(
-            itertools.repeat(path, repeats) for path in image_paths
-        ))
-        self.num_samples = len(self.image_paths)
-
-    def _precompute_bucket_indices(self):
-        """Precompute bucket indices in parallel with progress tracking"""
-        self.bucket_indices = [None] * self.num_samples
-        
-        # Try to load cached sizes
-        if self.size_cache_path.exists():
             try:
-                sizes = np.load(self.size_cache_path, allow_pickle=True)
-                self._process_sizes(sizes)
-                logger.info(f"Loaded cached image sizes from {self.size_cache_path}")
-                return
-            except Exception as e:
-                logger.warning(f"Failed to load size cache: {e}")
-        
-        # Compute sizes in parallel
-        sizes = [None] * self.num_samples
-        with ThreadPoolExecutor(max_workers=48) as executor:
-            futures = {}
-            for i in range(self.num_samples):
-                futures[executor.submit(self._get_image_size, i)] = i
-            
-            for future in tqdm(as_completed(futures), total=len(futures), 
-                              desc="Computing image sizes"):
-                idx = futures[future]
-                sizes[idx] = future.result()
-        
-        # Save to cache
-        np.save(self.size_cache_path, sizes, allow_pickle=True)
-        self._process_sizes(sizes)
+                from datasets import load_dataset,load_from_disk
+            except ImportError:
+                raise ImportError(
+                    "You are trying to load your data using the datasets library. If you wish to train using custom "
+                    "captions please install the datasets library: `pip install datasets`. If you wish to load a "
+                    "local folder containing images only, specify --instance_data_dir instead."
+                )
+            # Downloading and loading a dataset from the hub.
+            # See more about loading custom images at
+            # https://huggingface.co/docs/datasets/v2.0.0/en/dataset_script
+            # dataset = load_dataset(
+            #     args.dataset_name,
+            #     args.dataset_config_name,
+            #     cache_dir=args.cache_dir,
+            # )
+            dataset = load_dataset(
+                "imagefolder",
+                data_dir=args.dataset_name,
+                # split="train",
+            )         
+            # dataset = load_from_disk(args.dataset_name)
+            # Preprocessing the datasets.
+            column_names = dataset["train"].column_names
+            print(f"Dataset columns: {', '.join(column_names)}")
+            print(f"Dataset name: {args.dataset_name}")
+            # 6. Get the column names for input/target.
+            if args.cond_image_column is not None and args.cond_image_column not in column_names:
+                raise ValueError(
+                    f"`--cond_image_column` value '{args.cond_image_column}' not found in dataset columns. Dataset columns are: {', '.join(column_names)}"
+                )
+            if args.image_column is None:
+                image_column = column_names[0]
+                logger.info(f"image column defaulting to {image_column}")
+            else:
+                image_column = args.image_column
+                if image_column not in column_names:
+                    raise ValueError(
+                        f"`--image_column` value '{args.image_column}' not found in dataset columns. Dataset columns are: {', '.join(column_names)}"
+                    )
+            print("len_dataset", len(dataset["train"]))
+            instance_images = [dataset["train"][i][image_column] for i in range(len(dataset["train"]))]
+            cond_images = None
+            cond_image_column = args.cond_image_column
+            if cond_image_column is not None:
+                cond_images = [dataset["train"][i][cond_image_column] for i in range(len(dataset["train"]))]
+                assert len(instance_images) == len(cond_images)
 
-    def _process_sizes(self, sizes):
-        """Process precomputed sizes into bucket indices"""
-        self.bucket_indices = [0] * self.num_samples
-        self.target_sizes = [None] * self.num_samples
-        
-        # Compute bucket indices in parallel
-        with ThreadPoolExecutor(max_workers=48) as executor:
-            futures = {}
-            for i, size in enumerate(sizes):
-                if size is None:
-                    continue
-                futures[executor.submit(
-                    find_nearest_bucket, size[0], size[1], self.buckets
-                )] = i
-            
-            for future in tqdm(as_completed(futures), total=len(futures),
-                            desc="Computing bucket assignments"):
-                idx = futures[future]
-                bucket = future.result()  # 这里bucket是tuple
-                if bucket in self.buckets:
-                    bucket_idx = self.buckets.index(bucket)
-                else:
-                    bucket_idx = 0  # fallback
-                self.bucket_indices[idx] = bucket_idx
-                self.target_sizes[idx] = bucket
+            if args.caption_column is None:
+                logger.info(
+                    "No caption column provided, defaulting to instance_prompt for all images. If your dataset "
+                    "contains captions/prompts for the images, make sure to specify the "
+                    "column as --caption_column"
+                )
+                self.custom_instance_prompts = None
+            else:
+                if args.caption_column not in column_names:
+                    raise ValueError(
+                        f"`--caption_column` value '{args.caption_column}' not found in dataset columns. Dataset columns are: {', '.join(column_names)}"
+                    )
+                custom_instance_prompts = dataset["train"][args.caption_column]
+                # create final list of captions according to --repeats
+                self.custom_instance_prompts = []
+                for caption in custom_instance_prompts:
+                    self.custom_instance_prompts.extend(itertools.repeat(caption, repeats))
+        else:
+            self.instance_data_root = Path(instance_data_root)
+            if not self.instance_data_root.exists():
+                raise ValueError("Instance images root doesn't exists.")
 
-    def _get_image_size(self, index):
-        """Get image size without loading full image"""
-        if hasattr(self, 'dataset'):
-            return self._get_hf_image_size(index)
-        return self._get_local_image_size(index)
+            instance_images = [Image.open(path) for path in list(Path(instance_data_root).iterdir())]
+            self.custom_instance_prompts = None
 
-    def _get_hf_image_size(self, index):
-        """Get image size from HF dataset"""
-        try:
-            img_data = self.dataset[index][self.image_column]
-            if isinstance(img_data, dict):  # Bytes format
-                with Image.open(io.BytesIO(img_data['bytes'])) as img:
-                    return img.size
-            else:  # PIL Image
-                return img_data.size
-        except Exception as e:
-            logger.error(f"Error getting size for index {index}: {e}")
-            return (512, 512)  # Fallback size
+        self.instance_images = []
+        self.cond_images = []
+        for i, img in enumerate(instance_images):
+            self.instance_images.extend(itertools.repeat(img, repeats))
+            if args.dataset_name is not None and cond_images is not None:
+                self.cond_images.extend(itertools.repeat(cond_images[i], repeats))
 
-    def _get_local_image_size(self, index):
-        """Get image size from local file"""
-        try:
-            with Image.open(self.image_paths[index]) as img:
-                img = exif_transpose(img)
-                return img.size
-        except Exception as e:
-            logger.error(f"Error getting size for {self.image_paths[index]}: {e}")
-            return (512, 512)  # Fallback size
+        self.pixel_values = []
+        self.cond_pixel_values = []
+        breakpoint()
+        for i, image in enumerate(self.instance_images):
+            print("image.type", type(image))
+            image = dict_to_image(image)
+            image = exif_transpose(image)
+            if not image.mode == "RGB":
+                image = image.convert("RGB")
+            dest_image = None
+            if self.cond_images:
+                dest_image = dict_to_image(self.cond_images[i])
+                dest_image = exif_transpose(self.cond_images[i])
+                dest_image = exif_transpose(dest_image)
+                if not dest_image.mode == "RGB":
+                    dest_image = dest_image.convert("RGB")
 
-    def _load_image(self, index):
-        """Load image for given index"""
-        if hasattr(self, 'dataset'):
-            return self._load_hf_image(index)
-        return self._load_local_image(index)
+            width, height = image.size
 
-    def _load_hf_image(self, index):
-        orig_idx = self.instance_indices[index]
-        img = self.dataset[orig_idx][self.image_column]
-        
-        if isinstance(img, dict):
-            img = Image.open(io.BytesIO(img['bytes']))
-        img = exif_transpose(img)
-        
-        if not img.mode == "RGB":
-            img = img.convert("RGB")
-            
-        cond_img = None
-        if self.cond_image_column:
-            cond_img = self.dataset[orig_idx][self.cond_image_column]
-            if isinstance(cond_img, dict):
-                cond_img = Image.open(io.BytesIO(cond_img['bytes']))
-            cond_img = exif_transpose(cond_img)
-            if cond_img and not cond_img.mode == "RGB":
-                cond_img = cond_img.convert("RGB")
-                
-        return img, cond_img
+            # Find the closest bucket
+            bucket_idx = find_nearest_bucket(height, width, self.buckets)
+            target_height, target_width = self.buckets[bucket_idx]
+            self.size = (target_height, target_width)
 
-    def _load_local_image(self, index):
-        img = Image.open(self.image_paths[index])
-        img = exif_transpose(img)
-        if not img.mode == "RGB":
-            img = img.convert("RGB")
-        return img, None
+            # based on the bucket assignment, define the transformations
+            image, dest_image = self.paired_transform(
+                image,
+                dest_image=dest_image,
+                size=self.size,
+                center_crop=args.center_crop,
+                random_flip=args.random_flip,
+            )
+            self.pixel_values.append((image, bucket_idx))
+            if dest_image is not None:
+                self.cond_pixel_values.append((dest_image, bucket_idx))
 
-    def _init_class_images(self, class_data_root, class_num):
-        """Initialize class images with caching"""
-        if class_data_root is None:
+        self.num_instance_images = len(self.instance_images)
+        self._length = self.num_instance_images
+
+        if class_data_root is not None:
+            self.class_data_root = Path(class_data_root)
+            self.class_data_root.mkdir(parents=True, exist_ok=True)
+            self.class_images_path = list(self.class_data_root.iterdir())
+            if class_num is not None:
+                self.num_class_images = min(len(self.class_images_path), class_num)
+            else:
+                self.num_class_images = len(self.class_images_path)
+            self._length = max(self.num_class_images, self.num_instance_images)
+        else:
             self.class_data_root = None
-            self.num_class_images = 0
-            self.class_image_paths = []
-            return
 
-        self.class_data_root = Path(class_data_root)
-        self.class_data_root.mkdir(parents=True, exist_ok=True)
-        self.class_image_paths = sorted(list(self.class_data_root.iterdir()))
-        
-        # Create bucket cache for class images
-        class_cache_path = self.cache_dir / "class_buckets.npy"
-        if class_cache_path.exists():
-            try:
-                self.class_buckets = np.load(class_cache_path, allow_pickle=True)
-                logger.info(f"Loaded class bucket cache from {class_cache_path}")
-            except:
-                self.class_buckets = self._precompute_class_buckets()
-                np.save(class_cache_path, self.class_buckets)
-        else:
-            self.class_buckets = self._precompute_class_buckets()
-            np.save(class_cache_path, self.class_buckets)
-
-        self.num_class_images = min(len(self.class_image_paths), class_num or float('inf'))
-        if self.num_class_images < len(self.class_image_paths):
-            self.class_image_paths = random.sample(self.class_image_paths, self.num_class_images)
-
-    def _precompute_class_buckets(self):
-        """Precompute class image buckets in parallel"""
-        num_class = len(self.class_image_paths)
-        sizes = [None] * num_class
-        with ThreadPoolExecutor(max_workers=48) as executor:
-            futures = {executor.submit(self._get_class_size, i): i for i in range(num_class)}
-            for future in as_completed(futures):
-                i = futures[future]
-                sizes[i] = future.result()
-
-        buckets = [None] * num_class
-        with ThreadPoolExecutor(max_workers=48) as executor:
-            futures = {}
-            for i, size in enumerate(sizes):
-                if size is None:
-                    continue
-                futures[executor.submit(
-                    find_nearest_bucket, size[0], size[1], self.buckets
-                )] = i
-            
-            for future in as_completed(futures):
-                i = futures[future]
-                buckets[i] = self.buckets[future.result()]
-                
-        return buckets
-
-    def _get_class_size(self, index):
-        try:
-            with Image.open(self.class_image_paths[index]) as img:
-                img = exif_transpose(img)
-                return img.size
-        except Exception as e:
-            logger.error(f"Error getting class image size: {e}")
-            return (512, 512)
-
-    def __len__(self):
-        return max(self.num_class_images, self.num_samples) if self.class_data_root else self.num_samples
-
-    def __getitem__(self, index):
-        instance_idx = index % self.num_samples
-        image, cond_image = self._load_image(instance_idx)
-        
-        # Get target size for this index
-        target_size = self.target_sizes[instance_idx]
-        if target_size is None:
-            logger.warning(f"Using fallback size for index {index}")
-            target_size = (512, 512)
-        
-        # Apply transformations
-        image, cond_image = self.paired_transform(
-            image, 
-            dest_image=cond_image,
-            size=target_size,
-            center_crop=self.center_crop,
-            random_flip=self.random_flip
-        )
-        
-        # Create sample dictionary
-        sample = {
-            "instance_images": image,
-            "bucket_idx": self.bucket_indices[instance_idx],
-        }
-        
-        if cond_image is not None:
-            sample["cond_images"] = cond_image
-            
-        # Add prompt
-        if self.custom_instance_prompts:
-            sample["instance_prompt"] = self.custom_instance_prompts[instance_idx]
-        else:
-            sample["instance_prompt"] = self.instance_prompt
-            
-        # Add class images if available
-        if self.class_data_root and index < self.num_class_images:
-            class_img = Image.open(self.class_image_paths[index])
-            class_img = exif_transpose(class_img)
-            if not class_img.mode == "RGB":
-                class_img = class_img.convert("RGB")
-                
-            # Transform to target size
-            h, w = self.class_buckets[index]
-            class_img = transforms.Compose([
-                transforms.Resize((h, w), interpolation=transforms.InterpolationMode.BILINEAR),
-                transforms.CenterCrop((h, w)) if self.center_crop else transforms.RandomCrop((h, w)),
+        self.image_transforms = transforms.Compose(
+            [
+                transforms.Resize(self.size, interpolation=transforms.InterpolationMode.BILINEAR),
+                transforms.CenterCrop(self.size) if center_crop else transforms.RandomCrop(self.size),
                 transforms.ToTensor(),
                 transforms.Normalize([0.5], [0.5]),
-            ])(class_img)
-            
-            sample["class_images"] = class_img
-            sample["class_prompt"] = self.class_prompt
+            ]
+        )
 
-        return sample
+    def __len__(self):
+        return self._length
 
-    def paired_transform(self, image, dest_image=None, size=(512, 512), 
-                        center_crop=False, random_flip=False):
-        # Convert size to (height, width)
-        height, width = size
-        
-        # Resize with same interpolation
-        resize = transforms.Resize((height, width), 
-                                  interpolation=transforms.InterpolationMode.BILINEAR)
+    def __getitem__(self, index):
+        example = {}
+        instance_image, bucket_idx = self.pixel_values[index % self.num_instance_images]
+        example["instance_images"] = instance_image
+        example["bucket_idx"] = bucket_idx
+        if self.cond_pixel_values:
+            dest_image, _ = self.cond_pixel_values[index % self.num_instance_images]
+            example["cond_images"] = dest_image
+
+        if self.custom_instance_prompts:
+            caption = self.custom_instance_prompts[index % self.num_instance_images]
+            if caption:
+                example["instance_prompt"] = caption
+            else:
+                example["instance_prompt"] = self.instance_prompt
+
+        else:  # custom prompts were provided, but length does not match size of image dataset
+            example["instance_prompt"] = self.instance_prompt
+
+        if self.class_data_root:
+            # class_image = Image.open(self.class_images_path[index % self.num_class_images])
+            class_image = exif_transpose(class_image)
+
+            if not class_image.mode == "RGB":
+                class_image = class_image.convert("RGB")
+            example["class_images"] = self.image_transforms(class_image)
+            example["class_prompt"] = self.class_prompt
+
+        return example
+
+    def paired_transform(self, image, dest_image=None, size=(224, 224), center_crop=False, random_flip=False):
+        # 1. Resize (deterministic)
+        resize = transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR)
         image = resize(image)
         if dest_image is not None:
             dest_image = resize(dest_image)
-            
-        # Crop - same for both images
+
+        # 2. Crop: either center or SAME random crop
         if center_crop:
-            crop = transforms.CenterCrop((height, width))
+            crop = transforms.CenterCrop(size)
             image = crop(image)
             if dest_image is not None:
                 dest_image = crop(dest_image)
         else:
-            # Same random crop for both images
-            i, j, h, w = transforms.RandomCrop.get_params(image, output_size=(height, width))
+            # get_params returns (i, j, h, w)
+            i, j, h, w = transforms.RandomCrop.get_params(image, output_size=size)
             image = TF.crop(image, i, j, h, w)
             if dest_image is not None:
                 dest_image = TF.crop(dest_image, i, j, h, w)
-                
-        # Random flip - same for both
-        if random_flip and random.random() < 0.5:
-            image = TF.hflip(image)
-            if dest_image is not None:
-                dest_image = TF.hflip(dest_image)
-                
-        # Convert to tensor and normalize
-        image = transforms.ToTensor()(image)
-        image = transforms.Normalize([0.5], [0.5])(image)
-        
+
+        # 3. Random horizontal flip with the SAME coin flip
+        if random_flip:
+            do_flip = random.random() < 0.5
+            if do_flip:
+                image = TF.hflip(image)
+                if dest_image is not None:
+                    dest_image = TF.hflip(dest_image)
+
+        # 4. ToTensor + Normalize (deterministic)
+        to_tensor = transforms.ToTensor()
+        normalize = transforms.Normalize([0.5], [0.5])
+        image = normalize(to_tensor(image))
         if dest_image is not None:
-            dest_image = transforms.ToTensor()(dest_image)
-            dest_image = transforms.Normalize([0.5], [0.5])(dest_image)
-            return image, dest_image
-            
-        return image, None
+            dest_image = normalize(to_tensor(dest_image))
+
+        return (image, dest_image) if dest_image is not None else (image, None)
+
 
 def collate_fn(examples, with_prior_preservation=False):
     pixel_values = [example["instance_images"] for example in examples]
     prompts = [example["instance_prompt"] for example in examples]
 
-    # Concat class and instance examples
+    # Concat class and instance examples for prior preservation.
+    # We do this to avoid doing two forward passes.
     if with_prior_preservation:
         pixel_values += [example["class_images"] for example in examples]
         prompts += [example["class_prompt"] for example in examples]
@@ -1427,13 +1006,11 @@ def collate_fn(examples, with_prior_preservation=False):
     pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
 
     batch = {"pixel_values": pixel_values, "prompts": prompts}
-    
     if any("cond_images" in example for example in examples):
         cond_pixel_values = [example["cond_images"] for example in examples]
         cond_pixel_values = torch.stack(cond_pixel_values)
         cond_pixel_values = cond_pixel_values.to(memory_format=torch.contiguous_format).float()
-        batch["cond_pixel_values"] = cond_pixel_values
-        
+        batch.update({"cond_pixel_values": cond_pixel_values})
     return batch
 
 
@@ -1450,7 +1027,7 @@ class BucketBatchSampler(BatchSampler):
 
         # Group indices by bucket
         self.bucket_indices = [[] for _ in range(len(self.dataset.buckets))]
-        for idx, bucket_idx in enumerate(self.dataset.bucket_indices):
+        for idx, (_, bucket_idx) in enumerate(self.dataset.pixel_values):
             self.bucket_indices[bucket_idx].append(idx)
 
         self.sampler_len = 0
@@ -2081,24 +1658,11 @@ def main(args):
     # If no type of tuning is done on the text_encoder and custom instance prompts are NOT
     # provided (i.e. the --instance_prompt is used for all images), we encode the instance prompt once to avoid
     # the redundant encoding.
-    # 只需处理一次 embedding，如果没有自定义 caption
-    if not train_dataset.custom_instance_prompts and not args.train_text_encoder:
+    if not args.train_text_encoder and not train_dataset.custom_instance_prompts:
         instance_prompt_hidden_states, instance_pooled_prompt_embeds, instance_text_ids = compute_text_embeddings(
             args.instance_prompt, text_encoders, tokenizers
         )
-        if args.with_prior_preservation:
-            class_prompt_hidden_states, class_pooled_prompt_embeds, class_text_ids = compute_text_embeddings(
-                args.class_prompt, text_encoders, tokenizers
-            )
-            prompt_embeds = torch.cat([instance_prompt_hidden_states, class_prompt_hidden_states], dim=0)
-            pooled_prompt_embeds = torch.cat([instance_pooled_prompt_embeds, class_pooled_prompt_embeds], dim=0)
-            text_ids = torch.cat([instance_text_ids, class_text_ids], dim=0)
-        else:
-            prompt_embeds = instance_prompt_hidden_states
-            pooled_prompt_embeds = instance_pooled_prompt_embeds
-            text_ids = instance_text_ids
 
-            
     # Handle class prompt for prior-preservation.
     if args.with_prior_preservation:
         if not args.train_text_encoder:
@@ -2141,12 +1705,13 @@ def main(args):
                 tokens_two = torch.cat([tokens_two, class_tokens_two], dim=0)
 
     elif train_dataset.custom_instance_prompts and not args.train_text_encoder:
-        # 直接只计算一次 embedding，所有 batch 共享
-        single_prompt = train_dataset.custom_instance_prompts[0]
-        prompt_embeds, pooled_prompt_embeds, text_ids = compute_text_embeddings(
-            [single_prompt], text_encoders, tokenizers
-        )
-        cached_text_embeddings = [(prompt_embeds, pooled_prompt_embeds, text_ids)] * len(train_dataloader)
+        cached_text_embeddings = []
+        for batch in tqdm(train_dataloader, desc="Embedding prompts"):
+            batch_prompts = batch["prompts"]
+            prompt_embeds, pooled_prompt_embeds, text_ids = compute_text_embeddings(
+                batch_prompts, text_encoders, tokenizers
+            )
+            cached_text_embeddings.append((prompt_embeds, pooled_prompt_embeds, text_ids))
 
         if args.validation_prompt is None:
             text_encoder_one.cpu(), text_encoder_two.cpu()
@@ -2313,7 +1878,7 @@ def main(args):
             with accelerator.accumulate(models_to_accumulate):
                 prompts = batch["prompts"]
 
-                # 只在有自定义 caption 时才重新计算 embedding
+                # encode batch prompts when custom prompts are provided for each image -
                 if train_dataset.custom_instance_prompts:
                     if not args.train_text_encoder:
                         prompt_embeds, pooled_prompt_embeds, text_ids = cached_text_embeddings[step]
@@ -2331,9 +1896,19 @@ def main(args):
                             prompt=prompts,
                         )
                 else:
-                    # 直接复用预先计算好的 embedding
-                    pass  # prompt_embeds, pooled_prompt_embeds, text_ids 已在前面准备好
-
+                    elems_to_repeat = len(prompts)
+                    if args.train_text_encoder:
+                        prompt_embeds, pooled_prompt_embeds, text_ids = encode_prompt(
+                            text_encoders=[text_encoder_one, text_encoder_two],
+                            tokenizers=[None, None],
+                            text_input_ids_list=[
+                                tokens_one.repeat(elems_to_repeat, 1),
+                                tokens_two.repeat(elems_to_repeat, 1),
+                            ],
+                            max_sequence_length=args.max_sequence_length,
+                            device=accelerator.device,
+                            prompt=args.instance_prompt,
+                        )
 
                 # Convert images to latent space
                 if args.cache_latents:
